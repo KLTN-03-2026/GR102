@@ -11,14 +11,20 @@ return new class extends Migration
      */
     public function up(): void
     {
-        Schema::create('thuocs', function (Blueprint $table) {
+        $driver = Schema::getConnection()->getDriverName();
+
+        Schema::create('thuocs', function (Blueprint $table) use ($driver) {
             $table->string('ma_thuoc', 10)->primary();
             $table->string('ten_thuoc', 100);
             $table->string('ham_luong')->nullable();
             $table->string('don_vi_tinh');
             $table->unsignedInteger('gia_ban');
             $table->enum('trang_thai', ['còn bán', 'ngừng bán'])->default('còn bán');
-            $table->foreignId('id_loai_thuoc')->constrained('loai_thuocs')->onDelete('cascade');
+
+            if ($driver !== 'sqlite') {
+                $table->foreignId('id_loai_thuoc')->constrained('loai_thuocs')->onDelete('cascade');
+            }
+
             $table->foreignId('id_nha_san_xuat')->constrained('nha_san_xuats')->onDelete('cascade');
             $table->timestamps();
         });

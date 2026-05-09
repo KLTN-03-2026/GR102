@@ -77,19 +77,10 @@
       </div>
     </section>
 
-    <section class="pc-services">
-      <div class="container-fluid pc-container">
-        <div v-for="service in quickServices" :key="service.label" class="pc-service-chip" :class="service.tone">
-          <span class="pc-service-chip__icon"><i :class="service.icon"></i></span>
-          <span>{{ service.label }}</span>
-        </div>
-      </div>
-    </section>
-
     <section class="pc-categories">
       <div class="container-fluid pc-container">
         <div class="pc-section-head">
-          <h2>Danh mục tủ thuốc</h2>
+          <h2>Vấn đề sức khỏe</h2>
         </div>
 
         <div class="pc-category-grid">
@@ -100,8 +91,12 @@
             class="pc-category-card"
             @click="openSymptomCategory(item.slug)"
           >
-            <span class="pc-category-card__icon"><i :class="item.icon"></i></span>
-            <span>{{ item.label }}</span>
+            <div class="pc-category-card__icon-slot">
+              <span class="pc-category-card__icon"><i :class="item.icon"></i></span>
+            </div>
+            <div class="pc-category-card__label-slot">
+              <span class="pc-category-card__label">{{ item.label }}</span>
+            </div>
           </button>
         </div>
 
@@ -117,83 +112,121 @@
       <div class="container-fluid pc-container">
         <div v-if="catalogError" class="alert alert-danger">{{ catalogError }}</div>
 
-        <div class="pc-product-section">
+        <div v-for="section in visibleHomeProductSections" :key="section.slug" class="pc-product-section">
           <div class="pc-section-head">
-            <h2>Thực phẩm bảo vệ sức khỏe mẹ và bé</h2>
-            <button type="button">Xem tất cả <i class="bi bi-arrow-right"></i></button>
+            <div>
+              <h2>{{ section.label }}</h2>
+            </div>
+            <button type="button" @click="openSymptomCategory(section.slug)">
+              Xem tất cả <i class="bi bi-arrow-right"></i>
+            </button>
           </div>
 
-          <div class="pc-product-grid">
-            <article v-for="product in featuredProducts" :key="`featured-${product.ma_thuoc}`" class="pc-product-card">
+          <div v-if="section.products.length" class="pc-product-grid">
+            <article
+              v-for="product in section.products"
+              :key="`${section.slug}-${product.ma_thuoc}`"
+              class="pc-product-card"
+              role="button"
+              tabindex="0"
+              @click="viewProduct(product)"
+              @keydown.enter.prevent="viewProduct(product)"
+              @keydown.space.prevent="viewProduct(product)"
+            >
               <div v-if="product.co_khuyen_mai" class="pc-product-card__badge">
-                {{ product.khuyen_mai?.nhan_hien_thi || `Giảm ${discountPercent(product)}%` }}
+                {{ promotionBadgeLabel(product) }}
               </div>
-              <div class="pc-product-card__image" :class="thumbTone(product)">
-                <div class="pc-product-card__pill">{{ product.loai_thuoc || 'Thuốc' }}</div>
-                <i :class="thumbIcon(product)"></i>
+              <div class="pc-product-card__media-slot">
+                <div class="pc-product-card__image" :class="thumbTone(product)">
+                  <div class="pc-product-card__pill">{{ product.loai_thuoc || 'Thuốc' }}</div>
+                  <img
+                    v-if="product.hinh_anh_url"
+                    :src="product.hinh_anh_url"
+                    :alt="product.ten_thuoc"
+                    style="width: 100%; height: 100%; object-fit: contain; display: block; border-radius: inherit"
+                  />
+                  <i v-else :class="thumbIcon(product)"></i>
+                </div>
               </div>
-              <h3>{{ product.ten_thuoc }}</h3>
-              <p>{{ product.mo_ta }}</p>
-              <div class="pc-product-card__price">
-                <strong>{{ formatCurrency(product.gia_ban) }}</strong>
-                <span v-if="product.co_khuyen_mai">{{ formatCurrency(product.gia_niem_yet) }}</span>
-              </div>
-              <div class="pc-product-card__stock">Còn {{ product.so_luong_ton }} {{ product.don_vi_tinh }}</div>
-              <div class="pc-product-card__actions">
-                <button type="button" @click="viewProduct(product)">Xem chi tiết</button>
-                <button type="button" class="primary" @click="buyNow(product)">Chọn mua</button>
+              <div class="pc-product-card__body-slot">
+                <h3><span>{{ product.ten_thuoc }}</span></h3>
+                <p><span>{{ product.mo_ta }}</span></p>
+                <div v-if="!isPrescriptionProduct(product)" class="pc-product-card__price">
+                  <strong>{{ formatCurrency(product.gia_ban) }}</strong>
+                  <span v-if="product.co_khuyen_mai">{{ formatCurrency(product.gia_niem_yet) }}</span>
+                </div>
+                <div class="pc-product-card__stock">Còn {{ resolveProductStock(product) }} {{ resolveProductUnitLabel(product) }}</div>
+                <div v-if="isPrescriptionProduct(product)" class="pc-product-card__stock pc-product-card__stock--prescription">Cần tư vấn dược sĩ</div>
+                <div class="pc-product-card__actions">
+                  <button type="button" @click.stop="viewProduct(product)">Xem chi tiết</button>
+                  <button type="button" class="primary" @click.stop="isPrescriptionProduct(product) ? requestPharmacistConsult(product) : buyNow(product)">
+                    {{ isPrescriptionProduct(product) ? 'Tư vấn ngay' : 'Chọn mua' }}
+                  </button>
+                </div>
               </div>
             </article>
+          </div>
+
+          <div v-else class="pc-home-empty-section">
+            Chưa có sản phẩm trong danh mục này.
           </div>
         </div>
 
-        <div class="pc-product-section">
-          <div class="pc-section-head">
-            <h2>Sản phẩm mới tại PharmaGo</h2>
-            <button type="button">Xem tất cả <i class="bi bi-arrow-right"></i></button>
-          </div>
-
-          <div class="pc-product-grid">
-            <article v-for="product in newestProducts" :key="`new-${product.ma_thuoc}`" class="pc-product-card">
-              <div class="pc-product-card__badge">
-                {{ product.co_khuyen_mai ? (product.khuyen_mai?.nhan_hien_thi || 'Deal hot') : 'Mới' }}
-              </div>
-              <div class="pc-product-card__image" :class="thumbTone(product)">
-                <div class="pc-product-card__pill">{{ product.nha_san_xuat || 'PharmaGo' }}</div>
-                <i :class="thumbIcon(product)"></i>
-              </div>
-              <h3>{{ product.ten_thuoc }}</h3>
-              <p>{{ product.mo_ta }}</p>
-              <div class="pc-product-card__price">
-                <strong>{{ formatCurrency(product.gia_ban) }}</strong>
-                <span v-if="product.co_khuyen_mai">{{ formatCurrency(product.gia_niem_yet) }}</span>
-              </div>
-              <div class="pc-product-card__stock">Thuộc nhóm {{ product.loai_thuoc || 'Thuốc' }}</div>
-              <div class="pc-product-card__actions">
-                <button type="button" @click="viewProduct(product)">Xem chi tiết</button>
-                <button type="button" class="primary" @click="addProduct(product)">Chọn mua</button>
-              </div>
-            </article>
+        <div class="pc-home-pager-wrap">
+          <div class="pc-home-pager">
+            <button type="button" @click="prevHomeCategoryPage" :disabled="homeCategoryPageCount <= 1">
+              <i class="bi bi-chevron-left"></i>
+            </button>
+            <span>Trang {{ homeCategoryPageIndex + 1 }}/{{ homeCategoryPageCount }}</span>
+            <button type="button" @click="nextHomeCategoryPage" :disabled="homeCategoryPageCount <= 1">
+              <i class="bi bi-chevron-right"></i>
+            </button>
           </div>
         </div>
       </div>
     </section>
 
-    <div v-if="selectedProduct" class="pc-modal-backdrop" @click.self="selectedProduct = null">
+    <div v-if="selectedProduct" class="pc-modal-backdrop" @click.self="closeSelectedProduct()">
       <div class="pc-modal-card">
-        <button class="pc-modal-card__close" type="button" @click="selectedProduct = null">
+        <button class="pc-modal-card__close" type="button" @click="closeSelectedProduct()">
           <i class="bi bi-x-lg"></i>
         </button>
 
         <div class="pc-modal-card__head">
           <div class="pc-modal-card__preview" :class="thumbTone(selectedProduct)">
-            <i :class="thumbIcon(selectedProduct)"></i>
+            <img
+              v-if="selectedProduct.hinh_anh_url"
+              :src="selectedProduct.hinh_anh_url"
+              :alt="selectedProduct.ten_thuoc"
+              style="width: 100%; height: 100%; object-fit: cover; display: block; border-radius: inherit"
+            />
+            <i v-else :class="thumbIcon(selectedProduct)"></i>
           </div>
 
           <div>
             <div class="pc-modal-card__code">{{ selectedProduct.ma_thuoc }}</div>
             <h3>{{ selectedProduct.ten_thuoc }}</h3>
-            <p>{{ selectedProduct.nha_san_xuat || 'PharmaGo Care' }}</p>
+            <p class="mb-1">{{ selectedProduct.nha_san_xuat || 'PharmaGo Care' }}</p>
+            <div class="pc-modal-card__meta">
+              <div v-if="selectedProductUnitOptions.length > 1" class="pc-modal-card__variant">
+                <label class="pc-modal-card__variant-label">Phân loại sản phẩm</label>
+                <ProductVariantSelect
+                  v-model="selectedProductUnit"
+                  :options="selectedProductUnitOptions"
+                  class="pc-modal-card__variant-select"
+                />
+              </div>
+              <div v-if="!isPrescriptionProduct(selectedProduct)" class="pc-modal-card__price">
+                <div v-if="selectedProduct.co_khuyen_mai" class="pc-modal-card__promo-badge">
+                  {{ promotionBadgeLabel(selectedProduct) }}
+                </div>
+                <div class="pc-modal-card__price-label">Giá bán</div>
+                <div class="pc-modal-card__price-value">{{ formatCurrency(selectedProductUnitOption?.gia_ban || selectedProduct.gia_ban) }}</div>
+                <div v-if="selectedProductOriginalPrice > selectedProductCurrentPrice" class="pc-modal-card__price-original">
+                  {{ formatCurrency(selectedProductOriginalPrice) }}
+                </div>
+              </div>
+            </div>
           </div>
         </div>
 
@@ -201,7 +234,15 @@
           <div class="col-md-6">
             <div class="pc-modal-card__section">
               <div class="pc-modal-card__label">Mô tả sản phẩm</div>
-              <p>{{ selectedProduct.mo_ta }}</p>
+              <p :class="['pc-modal-card__description', { 'pc-modal-card__description--expanded': isSelectedProductDescriptionExpanded }]">{{ selectedProduct.mo_ta }}</p>
+              <button
+                v-if="shouldShowSelectedProductDescriptionToggle(selectedProduct)"
+                class="pc-modal-card__description-toggle"
+                type="button"
+                @click="toggleSelectedProductDescription()"
+              >
+                {{ isSelectedProductDescriptionExpanded ? 'Thu gọn' : 'Xem tất cả' }}
+              </button>
             </div>
           </div>
 
@@ -209,35 +250,38 @@
             <div class="pc-modal-card__section">
               <div class="pc-modal-card__label">Thông tin nhanh</div>
               <ul class="pc-modal-card__list">
-                <li><strong>Giá bán:</strong> {{ formatCurrency(selectedProduct.gia_ban) }}</li>
-                <li><strong>Số lượng tồn:</strong> {{ selectedProduct.so_luong_ton }} {{ selectedProduct.don_vi_tinh }}</li>
+                <li><strong>Số lượng còn:</strong> {{ resolveProductStock(selectedProduct, selectedProductUnit) }} {{ resolveProductUnitLabel(selectedProduct, selectedProductUnit) }}</li>
                 <li><strong>Hàm lượng:</strong> {{ selectedProduct.ham_luong || 'Đang cập nhật' }}</li>
               </ul>
             </div>
           </div>
 
-          <div class="col-md-6">
+          <div v-if="isPrescriptionProduct(selectedProduct)" class="col-12">
             <div class="pc-modal-card__section">
-              <div class="pc-modal-card__label">Thuốc này thường dùng cho triệu chứng</div>
-              <div class="pc-modal-card__chips">
-                <span v-for="item in selectedProduct.trieu_chung" :key="item">{{ item }}</span>
-              </div>
+              <div class="pc-modal-card__label">Thuốc kê đơn</div>
+              <p class="mb-0">Cần tư vấn dược sĩ trước khi mua sản phẩm này.</p>
             </div>
           </div>
 
-          <div class="col-md-6">
+          <div class="col-12">
             <div class="pc-modal-card__section">
-              <div class="pc-modal-card__label">Tác dụng phụ thường gặp</div>
+              <div class="pc-modal-card__label">Liều lượng</div>
               <ul class="pc-modal-card__list">
-                <li v-for="item in selectedProduct.tac_dung_phu" :key="item">{{ item }}</li>
+                <li v-for="item in selectedProduct.lieu_luong_items" :key="item">{{ item }}</li>
               </ul>
             </div>
           </div>
         </div>
 
         <div class="pc-modal-card__actions">
-          <button class="btn btn-outline-primary rounded-pill px-4" type="button" @click="selectedProduct = null">Đóng</button>
-          <button class="btn btn-primary rounded-pill px-4" type="button" @click="buyNow(selectedProduct)">Chọn mua</button>
+          <button class="btn btn-outline-primary rounded-pill px-4" type="button" @click="closeSelectedProduct()">Đóng</button>
+          <button
+            class="btn btn-primary rounded-pill px-4"
+            type="button"
+            @click="isPrescriptionProduct(selectedProduct) ? requestPharmacistConsult(selectedProduct) : buyNow(selectedProduct, selectedProductUnit)"
+          >
+            {{ isPrescriptionProduct(selectedProduct) ? 'Tư vấn ngay' : 'Chọn mua' }}
+          </button>
         </div>
       </div>
     </div>
@@ -246,20 +290,34 @@
 
 <script>
 import { getCatalogThuoc, getCatalogThuocs } from '../../../api/catalogApi';
-import { getCatalogSection } from '../../../data/catalogSections';
+import { filterProductsForSection, getCatalogSection } from '../../../data/catalogSections';
+import { buildPrescriptionConsultMessage, isPrescriptionProduct as isPrescriptionProductFlag } from '../../../lib/prescriptionProducts';
 import { useCustomerStore } from '../../../lib/customerStore';
+import { isAuthenticated } from '../../../lib/authStorage';
+import { normalizeApiError } from '../../../lib/errorMessages';
+import { applyProductUnitSelection, getDefaultProductUnit, getProductUnitLabel, getProductUnitOption, getProductUnitOptions, getProductUnitStock } from '../../../lib/productUnits';
+import { openSupportChat } from '../../../lib/supportChatEvents';
 import { showToast } from '../../../lib/toast';
+import ProductVariantSelect from '../ProductVariantSelect.vue';
 
 export default {
   name: 'TrangChuClient',
+
+  components: {
+    ProductVariantSelect,
+  },
 
   data() {
     return {
       thuocs: [],
       catalogError: '',
       selectedProduct: null,
+      selectedProductUnit: '',
+      isSelectedProductDescriptionExpanded: false,
       currentSlideIndex: 0,
       heroTimer: null,
+      homeCategoryPageIndex: 0,
+      homeCategoryPageSize: 2,
       customerStore: useCustomerStore(),
       heroSlides: [
         {
@@ -307,38 +365,60 @@ export default {
           chips: ['Theo dõi đơn hàng', 'Thanh toán linh hoạt', 'Thông báo khuyến mãi mới'],
           tickets: [
             { label: 'Miễn phí vận chuyển', className: 'pc-ticket--blue' },
-            { label: 'Thanh toán MoMo, ZaloPay', className: 'pc-ticket--purple' },
+            { label: 'Thanh toán tiền mặt, PayOS', className: 'pc-ticket--purple' },
             { label: 'Hỗ trợ khách hàng 24/7', className: 'pc-ticket--yellow' },
           ],
           bannerClass: 'pc-hero__banner--violet',
           phoneClass: 'pc-phone-card--cyan',
         },
       ],
-      quickServices: [
-        { label: 'Tư vấn mua thuốc', icon: 'bi bi-capsule', tone: 'tone-pink' },
-        { label: 'Liên hệ dược sĩ', icon: 'bi bi-person-badge', tone: 'tone-blue' },
-        { label: 'Hệ thống nhà thuốc', icon: 'bi bi-shop', tone: 'tone-green' },
-        { label: 'Mã giảm giá riêng', icon: 'bi bi-ticket-perforated', tone: 'tone-orange' },
-        { label: 'Kiểm tra sức khỏe', icon: 'bi bi-heart-pulse', tone: 'tone-cream' },
-      ],
     };
   },
 
   computed: {
     symptomCategories() {
-      return getCatalogSection('tu-thuoc').cards.filter((card) => card.slug !== 'tat-ca');
+      return getCatalogSection('tra-cuu-benh').cards.filter((card) => card.slug !== 'tat-ca');
     },
 
-    featuredProducts() {
-      return this.thuocs.slice(0, 5);
+    homeProductCategories() {
+      return this.symptomCategories.map((card) => {
+        const products = filterProductsForSection(this.thuocs, 'tra-cuu-benh', card.slug);
+
+        return {
+          ...card,
+          total: products.length,
+          products: products.slice(0, 4),
+        };
+      });
     },
 
-    newestProducts() {
-      return this.thuocs.slice(5, 10);
+    homeCategoryPageCount() {
+      return Math.max(Math.ceil(this.homeProductCategories.length / this.homeCategoryPageSize), 1);
+    },
+
+    visibleHomeProductSections() {
+      const startIndex = this.homeCategoryPageIndex * this.homeCategoryPageSize;
+      return this.homeProductCategories.slice(startIndex, startIndex + this.homeCategoryPageSize);
     },
 
     currentSlide() {
       return this.heroSlides[this.currentSlideIndex] || this.heroSlides[0];
+    },
+
+    selectedProductUnitOptions() {
+      return getProductUnitOptions(this.selectedProduct);
+    },
+
+    selectedProductUnitOption() {
+      return getProductUnitOption(this.selectedProduct, this.selectedProductUnit);
+    },
+
+    selectedProductCurrentPrice() {
+      return Number(this.selectedProductUnitOption?.gia_ban || this.selectedProduct?.gia_ban || 0);
+    },
+
+    selectedProductOriginalPrice() {
+      return Number(this.selectedProductUnitOption?.gia_niem_yet || this.selectedProduct?.gia_niem_yet || 0);
     },
   },
 
@@ -361,7 +441,7 @@ export default {
     },
 
     thumbIcon(product) {
-      const group = (product.loai_thuoc || '').toLowerCase();
+      const group = (product.nhan || product.loai_thuoc || '').toLowerCase();
 
       if (group.includes('vitamin')) return 'bi bi-sun';
       if (group.includes('da')) return 'bi bi-droplet-half';
@@ -371,13 +451,17 @@ export default {
     },
 
     thumbTone(product) {
-      const group = (product.loai_thuoc || '').toLowerCase();
+      const group = (product.nhan || product.loai_thuoc || '').toLowerCase();
 
       if (group.includes('vitamin')) return 'tone-yellow';
       if (group.includes('da')) return 'tone-green';
       if (group.includes('mẹ') || group.includes('bé')) return 'tone-pink';
 
       return 'tone-blue';
+    },
+
+    isPrescriptionProduct(product) {
+      return isPrescriptionProductFlag(product);
     },
 
     discountPercent(product) {
@@ -390,8 +474,43 @@ export default {
       return Math.round(((base - current) / base) * 100);
     },
 
+    promotionBadgeLabel(product) {
+      const customLabel = String(product?.khuyen_mai?.nhan_hien_thi || product?.khuyen_mai_nhan_hien_thi || '').trim();
+
+      if (customLabel) {
+        return customLabel;
+      }
+
+      const promotionType = String(product?.khuyen_mai?.loai_ap_dung || '').trim();
+      const promotionValue = Number(product?.khuyen_mai?.gia_tri || 0);
+
+      if (promotionType === 'phan_tram' && promotionValue > 0) {
+        return `-${promotionValue}%`;
+      }
+
+      const discount = this.discountPercent(product);
+      return discount > 0 ? `-${discount}%` : 'Đang ưu đãi';
+    },
+
     openSymptomCategory(slug) {
-      this.$router.push(`/danh-muc/tu-thuoc/${slug}`);
+      this.$router.push(`/danh-muc/tra-cuu-benh/${slug}`);
+    },
+
+    nextHomeCategoryPage() {
+      if (this.homeCategoryPageCount <= 1) {
+        return;
+      }
+
+      this.homeCategoryPageIndex = (this.homeCategoryPageIndex + 1) % this.homeCategoryPageCount;
+    },
+
+    prevHomeCategoryPage() {
+      if (this.homeCategoryPageCount <= 1) {
+        return;
+      }
+
+      this.homeCategoryPageIndex =
+        (this.homeCategoryPageIndex - 1 + this.homeCategoryPageCount) % this.homeCategoryPageCount;
     },
 
     nextSlide() {
@@ -434,7 +553,7 @@ export default {
         const response = await getCatalogThuocs('');
         this.thuocs = response.data || [];
       } catch (error) {
-        this.catalogError = error?.message || 'Không tải được danh mục thuốc.';
+        this.catalogError = normalizeApiError(error, 'Không tải được danh mục thuốc.');
       }
     },
 
@@ -442,21 +561,260 @@ export default {
       try {
         const response = await getCatalogThuoc(product.ma_thuoc);
         this.selectedProduct = response.data;
+        this.selectedProductUnit = getDefaultProductUnit(response.data);
+        this.isSelectedProductDescriptionExpanded = false;
       } catch (error) {
-        this.catalogError = error?.message || 'Không tải được chi tiết sản phẩm.';
+        this.catalogError = normalizeApiError(error, 'Không tải được chi tiết sản phẩm.');
       }
     },
 
-    addProduct(product) {
-      this.customerStore.addToCart(product);
+    closeSelectedProduct() {
+      this.selectedProduct = null;
+      this.selectedProductUnit = '';
+      this.isSelectedProductDescriptionExpanded = false;
+    },
+
+    shouldShowSelectedProductDescriptionToggle(product) {
+      return String(product?.mo_ta || '').trim().length > 160;
+    },
+
+    toggleSelectedProductDescription() {
+      this.isSelectedProductDescriptionExpanded = !this.isSelectedProductDescriptionExpanded;
+    },
+
+    resolveProductStock(product, selectedUnit = '') {
+      return getProductUnitStock(product, selectedUnit);
+    },
+
+    resolveProductUnitLabel(product, selectedUnit = '') {
+      return getProductUnitLabel(product, selectedUnit);
+    },
+
+    resolveProductForCart(product, selectedUnit = '') {
+      return applyProductUnitSelection(product, selectedUnit || getDefaultProductUnit(product));
+    },
+
+    requireLoginForPurchase() {
+      if (isAuthenticated()) {
+        return false;
+      }
+
+      const redirectPath = this.$route.fullPath;
+      this.selectedProduct = null;
+      this.selectedProductUnit = '';
+      this.isSelectedProductDescriptionExpanded = false;
+      this.$router.push({
+        path: '/login',
+        query: { redirect: redirectPath },
+      });
+
+      return true;
+    },
+
+    requestPharmacistConsult(product) {
+      if (!product) {
+        return;
+      }
+
+      openSupportChat({
+        message: buildPrescriptionConsultMessage(product),
+        ma_thuoc: product.ma_thuoc,
+      });
+    },
+
+    addProduct(product, selectedUnit = '') {
+      if (this.isPrescriptionProduct(product)) {
+        this.requestPharmacistConsult(product);
+        return;
+      }
+
+      if (this.requireLoginForPurchase()) {
+        return;
+      }
+
+      this.customerStore.addToCart(this.resolveProductForCart(product, selectedUnit));
       showToast('Bạn vừa thêm vào giỏ hàng thành công');
     },
 
-    buyNow(product) {
-      this.customerStore.addToCart(product);
-      this.selectedProduct = null;
+    buyNow(product, selectedUnit = '') {
+      if (this.isPrescriptionProduct(product)) {
+        this.requestPharmacistConsult(product);
+        return;
+      }
+
+      if (this.requireLoginForPurchase()) {
+        return;
+      }
+
+      this.customerStore.addToCart(this.resolveProductForCart(product, selectedUnit));
+      this.closeSelectedProduct();
       showToast('Bạn vừa thêm vào giỏ hàng thành công');
     },
   },
 };
 </script>
+
+<style scoped>
+.pc-modal-card__meta {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  gap: 16px 22px;
+  margin-top: 14px;
+}
+
+.pc-modal-card__variant {
+  min-width: 220px;
+}
+
+.pc-modal-card__variant-label,
+.pc-modal-card__price-label {
+  display: block;
+  margin-bottom: 8px;
+  color: #6980a7;
+  font-size: 0.82rem;
+  font-weight: 800;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.pc-modal-card__variant-select {
+  width: 100%;
+}
+
+.pc-modal-card__price {
+  display: flex;
+  flex-direction: column;
+  justify-content: flex-end;
+  min-height: 52px;
+}
+
+.pc-modal-card__price-value {
+  color: #162a49;
+  font-size: clamp(1.55rem, 2vw, 2rem);
+  font-weight: 800;
+  line-height: 1.05;
+}
+
+.pc-modal-card__promo-badge {
+  align-self: flex-start;
+  margin-bottom: 8px;
+  padding: 7px 12px;
+  border-radius: 999px;
+  background: #eb3030;
+  color: #fff;
+  font-size: 0.82rem;
+  font-weight: 800;
+  line-height: 1;
+}
+
+.pc-modal-card__price-original {
+  margin-top: 8px;
+  color: #8b9ab5;
+  font-size: 1rem;
+  font-weight: 700;
+  line-height: 1.1;
+  text-decoration: line-through;
+}
+
+.pc-modal-card__section p,
+.pc-product-card p {
+  white-space: pre-line;
+  overflow-wrap: anywhere;
+  word-break: break-word;
+}
+
+.pc-modal-card__description {
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 3;
+  overflow: hidden;
+  margin-bottom: 0;
+  white-space: pre-line;
+  word-break: break-word;
+  overflow-wrap: anywhere;
+}
+
+.pc-modal-card__description--expanded {
+  display: block;
+  overflow: visible;
+  white-space: pre-line;
+}
+
+.pc-modal-card__description-toggle {
+  margin-top: 10px;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: #1652c5;
+  font-size: 0.92rem;
+  font-weight: 700;
+}
+
+.pc-home-pager {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.pc-home-pager button {
+  width: 40px;
+  height: 40px;
+  border: 1px solid #d8e4ff;
+  border-radius: 12px;
+  background: #ffffff;
+  color: #1f5eff;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.2s ease;
+}
+
+.pc-home-pager button:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+.pc-home-pager button:not(:disabled):hover {
+  background: #f4f8ff;
+}
+
+.pc-home-pager span {
+  min-width: 92px;
+  text-align: center;
+  font-size: 0.95rem;
+  font-weight: 600;
+  color: #5e6f91;
+}
+
+.pc-home-pager-wrap {
+  display: flex;
+  justify-content: center;
+  margin-top: 24px;
+}
+
+.pc-home-section-copy {
+  color: #7082a6;
+  font-size: 0.95rem;
+}
+
+.pc-home-empty-section {
+  padding: 28px;
+  border: 1px dashed #d8e4ff;
+  border-radius: 24px;
+  background: #f8fbff;
+  color: #7082a6;
+  font-size: 0.98rem;
+}
+
+@media (max-width: 768px) {
+  .pc-modal-card__variant,
+  .pc-modal-card__price {
+    width: 100%;
+  }
+
+  .pc-home-pager {
+    justify-content: space-between;
+  }
+}
+</style>

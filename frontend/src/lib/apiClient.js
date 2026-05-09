@@ -1,6 +1,16 @@
-import { clearAuthSession, getAccessToken } from "./authStorage";
+import { clearAuthSession, getAccessToken, isSessionExpired } from "./authStorage";
 
-const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || "http://127.0.0.1:8000/api";
+const DEFAULT_API_BASE_URL = "http://127.0.0.1:8000/api";
+const DEFAULT_API_TIMEOUT_MS = 10000;
+const API_BASE_URL = (import.meta.env.VITE_API_BASE_URL || DEFAULT_API_BASE_URL).replace(/\/+$/, "");
+
+function buildApiUrl(path) {
+  if (!path) {
+    return API_BASE_URL;
+  }
+
+  return `${API_BASE_URL}${path.startsWith("/") ? path : `/${path}`}`;
+}
 
 async function parseResponse(response) {
   const contentType = response.headers.get("content-type") || "";
@@ -9,7 +19,7 @@ async function parseResponse(response) {
 
   if (!response.ok) {
     const message =
-      (isJson && (payload.message || payload.error)) || "Yeu cau that bai. Vui long thu lai.";
+      (isJson && (payload.message || payload.error)) || "Yêu cầu thất bại. Vui lòng thử lại.";
 
     if (response.status === 401) {
       clearAuthSession();
@@ -31,18 +41,66 @@ async function parseResponse(response) {
 
 export async function apiClient(path, options = {}) {
   const token = getAccessToken();
+
+  if (token && isSessionExpired()) {
+    clearAuthSession();
+
+    if (typeof window !== "undefined" && !window.location.pathname.startsWith("/login")) {
+      window.location.href = "/login?reason=session-expired";
+    }
+
+    throw {
+      status: 401,
+      message: "Phiên đăng nhập đã hết hạn sau 8 tiếng. Vui lòng đăng nhập lại.",
+      payload: null,
+    };
+  }
+
   const isFormData = options.body instanceof FormData;
+  const timeoutMs =
+    typeof options.timeoutMs === "number" && options.timeoutMs > 0
+      ? options.timeoutMs
+      : DEFAULT_API_TIMEOUT_MS;
   const headers = {
     Accept: "application/json",
     ...(!isFormData && options.body ? { "Content-Type": "application/json" } : {}),
     ...(token ? { Authorization: `Bearer ${token}` } : {}),
     ...(options.headers || {}),
   };
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => controller.abort("request_timeout"), timeoutMs);
 
-  const response = await fetch(`${API_BASE_URL}${path}`, {
-    ...options,
-    headers,
-  });
+  let response;
+
+  try {
+    response = await fetch(buildApiUrl(path), {
+      ...options,
+      headers,
+      signal: options.signal || controller.signal,
+    });
+  } catch (error) {
+    clearTimeout(timeoutId);
+
+    if (error?.name === "AbortError" || error === "request_timeout") {
+      throw {
+        status: 0,
+        message: `Không nhận được phản hồi từ Laravel API tại ${API_BASE_URL} sau ${Math.round(
+          timeoutMs / 1000
+        )} giây. Kiểm tra backend đã chạy.`,
+        payload: null,
+        cause: error,
+      };
+    }
+
+    throw {
+      status: 0,
+      message: `Không thể kết nối đến Laravel API tại ${API_BASE_URL}. Kiểm tra backend đã chạy và VITE_API_BASE_URL.`,
+      payload: null,
+      cause: error,
+    };
+  } finally {
+    clearTimeout(timeoutId);
+  }
 
   return parseResponse(response);
 }

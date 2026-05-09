@@ -75,6 +75,21 @@ class NhanVien extends Authenticatable
         return $this->hasMany(LichSuDonHang::class, 'id_nhan_vien', 'id_nhan_vien');
     }
 
+    public function hoTroHoiThoaisPhuTrach(): HasMany
+    {
+        return $this->hasMany(HoTroHoiThoai::class, 'id_nhan_vien_phu_trach', 'id_nhan_vien');
+    }
+
+    public function hoTroTinNhans(): HasMany
+    {
+        return $this->hasMany(HoTroTinNhan::class, 'id_nhan_vien', 'id_nhan_vien');
+    }
+
+    public function dangNhapLogs(): HasMany
+    {
+        return $this->hasMany(NhanVienDangNhapLog::class, 'id_nhan_vien', 'id_nhan_vien');
+    }
+
     public function getSoDienThoaiAttribute(): ?string
     {
         return $this->thongTinNhanVien?->so_dien_thoai;

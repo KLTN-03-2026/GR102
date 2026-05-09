@@ -2,16 +2,15 @@
 
 namespace Database\Seeders;
 
-use Illuminate\Database\Console\Seeds\WithoutModelEvents;
+use Database\Seeders\Concerns\SeedsDatabaseRows;
 use Illuminate\Database\Seeder;
 
 class NhaSanXuatSeeder extends Seeder
 {
-    /**
-     * Run the database seeds.
-     */
+    use SeedsDatabaseRows;
+
     public function run(): void
     {
-        //
+        $this->seedTableFromJson('nha_san_xuats', 'nha_san_xuats.json', 'id');
     }
 }

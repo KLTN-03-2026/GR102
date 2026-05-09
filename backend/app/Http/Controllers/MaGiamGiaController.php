@@ -5,6 +5,7 @@ namespace App\Http\Controllers;
 use App\Http\Requests\SearchKeywordRequest;
 use App\Http\Requests\StoreMaGiamGiaRequest;
 use App\Http\Requests\UpdateMaGiamGiaRequest;
+use App\Models\HoaDon;
 use App\Models\KhachHang;
 use App\Models\MaGiamGia;
 use App\Models\MaGiamGiaLuotDung;
@@ -18,6 +19,8 @@ class MaGiamGiaController extends Controller
 {
     public function index(Request $request): JsonResponse
     {
+        MaGiamGia::deactivateExpired();
+
         $keyword = trim((string) $request->string('q'));
 
         $items = MaGiamGia::query()
@@ -41,6 +44,8 @@ class MaGiamGiaController extends Controller
 
     public function store(StoreMaGiamGiaRequest $request): JsonResponse
     {
+        MaGiamGia::deactivateExpired();
+
         $payload = $this->normalizeDatePayload($request->validated());
 
         $item = MaGiamGia::create([
@@ -50,6 +55,8 @@ class MaGiamGiaController extends Controller
             'id_nhan_vien' => $request->user()?->id_nhan_vien,
         ]);
 
+        MaGiamGia::deactivateExpired();
+        $item->refresh();
         $item->load('nhanVien');
 
         return response()->json([
@@ -60,6 +67,8 @@ class MaGiamGiaController extends Controller
 
     public function show(int $id): JsonResponse
     {
+        MaGiamGia::deactivateExpired();
+
         $item = MaGiamGia::with('nhanVien')->find($id);
 
         if (! $item) {
@@ -74,6 +83,8 @@ class MaGiamGiaController extends Controller
 
     public function update(UpdateMaGiamGiaRequest $request, int $id): JsonResponse
     {
+        MaGiamGia::deactivateExpired();
+
         $item = MaGiamGia::find($id);
 
         if (! $item) {
@@ -90,6 +101,8 @@ class MaGiamGiaController extends Controller
         $payload['id_nhan_vien'] = $request->user()?->id_nhan_vien;
 
         $item->update($payload);
+        MaGiamGia::deactivateExpired();
+        $item->refresh();
         $item->load('nhanVien');
 
         return response()->json([
@@ -118,6 +131,8 @@ class MaGiamGiaController extends Controller
 
     public function customerList(Request $request): JsonResponse
     {
+        MaGiamGia::deactivateExpired();
+
         $keyword = trim((string) $request->string('q'));
         $khachHang = $request->user();
 
@@ -134,10 +149,13 @@ class MaGiamGiaController extends Controller
             })
             ->latest()
             ->get()
+            ->filter(fn (MaGiamGia $item): bool => $this->isCouponVisibleToCustomer($item, $khachHang))
+            ->filter(fn (MaGiamGia $item): bool => ! $this->isCouponAlreadyUnavailable($item, $khachHang))
             ->map(function (MaGiamGia $item) use ($khachHang): array {
                 $usageCount = $khachHang instanceof KhachHang
                     ? $this->usageCount($item->id, $khachHang->id_khach_hang)
                     : 0;
+                $reason = $this->customerCouponBlockReason($item, 0, $khachHang, false);
 
                 return [
                     ...$this->transform($item),
@@ -145,9 +163,8 @@ class MaGiamGiaController extends Controller
                     'so_lan_con_lai' => $item->gioi_han_moi_khach !== null
                         ? max((int) $item->gioi_han_moi_khach - $usageCount, 0)
                         : null,
-                    'co_the_su_dung' => $item->gioi_han_moi_khach === null
-                        ? true
-                        : $usageCount < (int) $item->gioi_han_moi_khach,
+                    'co_the_su_dung' => $reason === null,
+                    'ly_do_khong_su_dung' => $reason,
                 ];
             })
             ->values();
@@ -160,6 +177,8 @@ class MaGiamGiaController extends Controller
 
     public function customerAvailable(Request $request): JsonResponse
     {
+        MaGiamGia::deactivateExpired();
+
         $validated = $request->validate([
             'tong_tam_tinh' => ['nullable', 'numeric', 'min:0'],
             'q' => ['nullable', 'string', 'max:100'],
@@ -182,19 +201,14 @@ class MaGiamGiaController extends Controller
             })
             ->latest()
             ->get()
-            ->filter(function (MaGiamGia $item) use ($khachHang): bool {
-                if (! $khachHang instanceof KhachHang) {
-                    return true;
-                }
-
-                return $this->usageCount($item->id, $khachHang->id_khach_hang) === 0;
-            })
+            ->filter(fn (MaGiamGia $item): bool => $this->isCouponVisibleToCustomer($item, $khachHang))
+            ->filter(fn (MaGiamGia $item): bool => ! $this->isCouponAlreadyUnavailable($item, $khachHang))
             ->map(function (MaGiamGia $item) use ($khachHang, $subtotal): array {
                 $usageCount = $khachHang instanceof KhachHang
                     ? $this->usageCount($item->id, $khachHang->id_khach_hang)
                     : 0;
 
-                $reason = null;
+                $reason = $this->customerCouponBlockReason($item, $subtotal, $khachHang);
                 if ($subtotal < (int) $item->gia_tri_don_toi_thieu) {
                     $reason = 'Chưa đủ điều kiện để sử dụng mã này.';
                 }
@@ -214,7 +228,8 @@ class MaGiamGiaController extends Controller
                         : null,
                 ];
             })
-            ->sortByDesc(fn (array $item) => $item['co_the_ap_dung'])
+            ->sortByDesc(fn (array $item) => ((int) $item['co_the_ap_dung'] * 10)
+                + (int) ($item['tu_dong_ap_dung'] && $item['co_the_ap_dung']))
             ->values();
 
         return response()->json([
@@ -225,6 +240,8 @@ class MaGiamGiaController extends Controller
 
     public function available(Request $request): JsonResponse
     {
+        MaGiamGia::deactivateExpired();
+
         $validated = $request->validate([
             'tong_tam_tinh' => ['required', 'numeric', 'min:1'],
             'q' => ['nullable', 'string', 'max:100'],
@@ -249,12 +266,14 @@ class MaGiamGiaController extends Controller
             })
             ->latest()
             ->get()
+            ->filter(fn (MaGiamGia $item): bool => $this->isCouponVisibleToCustomer($item, $khachHang))
+            ->filter(fn (MaGiamGia $item): bool => ! $this->isCouponAlreadyUnavailable($item, $khachHang))
             ->map(function (MaGiamGia $item) use ($khachHang, $subtotal) {
                 $usageCount = $khachHang instanceof KhachHang
                     ? $this->usageCount($item->id, $khachHang->id_khach_hang)
                     : 0;
 
-                $reason = null;
+                $reason = $this->customerCouponBlockReason($item, $subtotal, $khachHang);
                 if ($subtotal < (int) $item->gia_tri_don_toi_thieu) {
                     $reason = 'Bạn không đủ điều kiện sử dụng mã này.';
                 } elseif (
@@ -280,7 +299,8 @@ class MaGiamGiaController extends Controller
                         : null,
                 ];
             })
-            ->sortByDesc(fn (array $item) => $item['co_the_ap_dung'])
+            ->sortByDesc(fn (array $item) => ((int) $item['co_the_ap_dung'] * 10)
+                + (int) ($item['tu_dong_ap_dung'] && $item['co_the_ap_dung']))
             ->values();
 
         return response()->json([
@@ -291,6 +311,8 @@ class MaGiamGiaController extends Controller
 
     public function validateCode(Request $request): JsonResponse
     {
+        MaGiamGia::deactivateExpired();
+
         $validated = $request->validate([
             'ma_giam_gia' => ['required', 'string', 'min:4', 'max:30'],
             'tong_tam_tinh' => ['required', 'numeric', 'min:1'],
@@ -314,6 +336,24 @@ class MaGiamGiaController extends Controller
             ], 404);
         }
 
+        $khachHang = $request->user();
+
+        if (! $this->isCouponVisibleToCustomer($item, $khachHang)) {
+            return response()->json([
+                'message' => 'Ma giam gia khong ap dung cho tai khoan nay.',
+            ], 403);
+        }
+
+        if (
+            $khachHang instanceof KhachHang
+            && $this->isFirstOrderCoupon($item)
+            && $this->customerHasCompletedOrder($khachHang)
+        ) {
+            return response()->json([
+                'message' => 'Ma don dau tien chi ap dung cho don hang dau tien.',
+            ], 422);
+        }
+
         if ($subtotal < (int) $item->gia_tri_don_toi_thieu) {
             return response()->json([
                 'message' => 'Don hang chua dat gia tri toi thieu de dung ma nay.',
@@ -323,7 +363,6 @@ class MaGiamGiaController extends Controller
             ], 422);
         }
 
-        $khachHang = $request->user();
         $soLanDaDung = $khachHang instanceof KhachHang
             ? $this->usageCount($item->id, $khachHang->id_khach_hang)
             : 0;
@@ -361,6 +400,8 @@ class MaGiamGiaController extends Controller
 
     public function redeemCode(Request $request): JsonResponse
     {
+        MaGiamGia::deactivateExpired();
+
         $khachHang = $request->user();
         if (! $khachHang instanceof KhachHang) {
             return response()->json([
@@ -374,7 +415,10 @@ class MaGiamGiaController extends Controller
         }
 
         $code = $this->normalizeCode((string) $request->input('ma_giam_gia'));
-        $item = MaGiamGia::whereRaw('UPPER(ma_giam_gia) = ?', [$code])->firstOrFail();
+        $item = MaGiamGia::query()
+            ->dangHoatDong()
+            ->whereRaw('UPPER(ma_giam_gia) = ?', [$code])
+            ->firstOrFail();
 
         $usage = MaGiamGiaLuotDung::firstOrCreate(
             [
@@ -414,8 +458,88 @@ class MaGiamGiaController extends Controller
             'trang_thai' => $item->trang_thai,
             'ngay_bat_dau' => optional($item->ngay_bat_dau)->toDateTimeString(),
             'ngay_ket_thuc' => optional($item->ngay_ket_thuc)->toDateTimeString(),
+            'da_bat_dau' => $item->isStarted(),
+            'da_het_han' => $item->isExpired(),
+            'dang_hoat_dong' => $item->isDangHoatDong(),
             'nhan_vien_cap_nhat' => $item->nhanVien?->ho_ten,
+            'id_khach_hang' => $item->id_khach_hang !== null ? (int) $item->id_khach_hang : null,
+            'loai_ma' => $item->loai_ma ?: 'general',
+            'tu_dong_ap_dung' => (bool) $item->tu_dong_ap_dung,
         ];
+    }
+
+    private function isCouponVisibleToCustomer(MaGiamGia $item, mixed $khachHang): bool
+    {
+        if ($item->id_khach_hang === null) {
+            return true;
+        }
+
+        return $khachHang instanceof KhachHang
+            && (int) $item->id_khach_hang === (int) $khachHang->id_khach_hang;
+    }
+
+    private function isCouponAlreadyUnavailable(MaGiamGia $item, mixed $khachHang): bool
+    {
+        if (! $khachHang instanceof KhachHang) {
+            return false;
+        }
+
+        if ($this->isFirstOrderCoupon($item) && $this->customerHasCompletedOrder($khachHang)) {
+            return true;
+        }
+
+        if ($item->gioi_han_moi_khach === null) {
+            return false;
+        }
+
+        return $this->usageCount($item->id, $khachHang->id_khach_hang) >= (int) $item->gioi_han_moi_khach;
+    }
+
+    private function customerCouponBlockReason(
+        MaGiamGia $item,
+        int $subtotal,
+        mixed $khachHang,
+        bool $checkMinimum = true
+    ): ?string {
+        if (! $this->isCouponVisibleToCustomer($item, $khachHang)) {
+            return 'Ma giam gia khong ap dung cho tai khoan nay.';
+        }
+
+        if (
+            $khachHang instanceof KhachHang
+            && $this->isFirstOrderCoupon($item)
+            && $this->customerHasCompletedOrder($khachHang)
+        ) {
+            return 'Ma don dau tien chi ap dung cho don hang dau tien.';
+        }
+
+        if (
+            $khachHang instanceof KhachHang
+            && $item->gioi_han_moi_khach !== null
+            && $this->usageCount($item->id, $khachHang->id_khach_hang) >= (int) $item->gioi_han_moi_khach
+        ) {
+            return 'Ban da dung het so lan cho phep cua ma giam gia nay.';
+        }
+
+        if ($checkMinimum && $subtotal < (int) $item->gia_tri_don_toi_thieu) {
+            return 'Chua du dieu kien de su dung ma nay.';
+        }
+
+        return null;
+    }
+
+    private function isFirstOrderCoupon(MaGiamGia $item): bool
+    {
+        return (string) $item->loai_ma === 'first_order';
+    }
+
+    private function customerHasCompletedOrder(KhachHang $khachHang): bool
+    {
+        return HoaDon::query()
+            ->where('id_khach_hang', $khachHang->id_khach_hang)
+            ->whereIn('trang_thai_xu_ly', ['cho_xac_nhan', 'da_xac_nhan', 'hoan_thanh'])
+            ->whereHas('chiTiets')
+            ->exists();
     }
 
     private function usageCount(int $maGiamGiaId, int $khachHangId): int

@@ -5,20 +5,25 @@ use App\Http\Controllers\BangCapController;
 use App\Http\Controllers\CatalogThuocController;
 use App\Http\Controllers\ChiTietHoaDonController;
 use App\Http\Controllers\ChiTietPhieuNhapController;
+use App\Http\Controllers\CounterSaleController;
 use App\Http\Controllers\CustomerOrderController;
+use App\Http\Controllers\CustomerAddressController;
+use App\Http\Controllers\DashboardAnalyticsController;
 use App\Http\Controllers\EmailVerificationController;
 use App\Http\Controllers\HoaDonController;
 use App\Http\Controllers\KhachHangController;
 use App\Http\Controllers\KhuyenMaiController;
 use App\Http\Controllers\LichSuDonHangController;
-use App\Http\Controllers\LoaiThuocController;
 use App\Http\Controllers\LoThuocController;
 use App\Http\Controllers\MaGiamGiaController;
 use App\Http\Controllers\NhanVienController;
 use App\Http\Controllers\NhaSanXuatController;
 use App\Http\Controllers\PasswordResetController;
+use App\Http\Controllers\PayosWebhookController;
 use App\Http\Controllers\PhieuNhapController;
+use App\Http\Controllers\SupportChatController;
 use App\Http\Controllers\ThanhToanController;
+use App\Http\Controllers\ThongBaoKhachHangController;
 use App\Http\Controllers\ThongTinNhanVienController;
 use App\Http\Controllers\ThuocController;
 use App\Http\Controllers\VaiTroController;
@@ -29,16 +34,19 @@ use Illuminate\Support\Facades\Route;
 // Public endpoints: client goi truc tiep, server xu ly trong controller/request/model
 // =========================
 Route::post('/login', [AuthController::class, 'login']);
+Route::post('/logout', [AuthController::class, 'logout'])->middleware('auth:sanctum');
 Route::post('/register', [AuthController::class, 'register']);
 Route::get('/catalog/thuocs', [CatalogThuocController::class, 'index']);
 Route::get('/catalog/thuocs/{ma_thuoc}', [CatalogThuocController::class, 'show']);
 Route::get('/email/verify/{token}', [AuthController::class, 'verifyEmail']);
 Route::post('/email-verifications/request', [EmailVerificationController::class, 'request']);
 Route::get('/email-verifications/verify/{token}', [EmailVerificationController::class, 'verify']);
+Route::post('/email-verifications/verify-code', [EmailVerificationController::class, 'verifyCode']);
 Route::post('/email-verifications/resend', [EmailVerificationController::class, 'resend']);
 Route::post('/password-resets/request', [PasswordResetController::class, 'request']);
 Route::post('/password-resets/validate-token', [PasswordResetController::class, 'validateToken']);
 Route::post('/password-resets/reset', [PasswordResetController::class, 'reset']);
+Route::post('/payos/webhook', PayosWebhookController::class);
 
 // =========================
 // SERVER
@@ -67,6 +75,7 @@ Route::prefix('admin')
 
         // Admin - Lo thuoc
         Route::get('/lo-thuocs/search', [LoThuocController::class, 'search']);
+        Route::get('/lo-thuocs/alerts', [LoThuocController::class, 'alerts']);
         Route::get('/lo-thuocs/expiring', [LoThuocController::class, 'expiring']);
         Route::get('/lo-thuocs', [LoThuocController::class, 'index']);
         Route::post('/lo-thuocs', [LoThuocController::class, 'store']);
@@ -85,6 +94,8 @@ Route::prefix('admin')
         Route::get('/nhan-viens/search', [NhanVienController::class, 'search']);
         Route::get('/nhan-viens', [NhanVienController::class, 'index']);
         Route::post('/nhan-viens', [NhanVienController::class, 'store']);
+        Route::get('/nhan-viens/{id}/work-sessions', [NhanVienController::class, 'workSessions']);
+        Route::get('/nhan-viens/{id}/sales-by-date', [NhanVienController::class, 'salesByDate']);
         Route::get('/nhan-viens/{id}', [NhanVienController::class, 'show']);
         Route::put('/nhan-viens/{id}', [NhanVienController::class, 'update']);
         Route::delete('/nhan-viens/{id}', [NhanVienController::class, 'destroy']);
@@ -153,13 +164,6 @@ Route::prefix('admin')
         Route::get('/password-resets', [PasswordResetController::class, 'index']);
         Route::get('/password-resets/{id}', [PasswordResetController::class, 'show']);
 
-        // Admin - Loai thuoc
-        Route::get('/loai-thuocs/search', [LoaiThuocController::class, 'search']);
-        Route::get('/loai-thuocs', [LoaiThuocController::class, 'index']);
-        Route::post('/loai-thuocs', [LoaiThuocController::class, 'store']);
-        Route::get('/loai-thuocs/{id}', [LoaiThuocController::class, 'show']);
-        Route::put('/loai-thuocs/{id}', [LoaiThuocController::class, 'update']);
-        Route::delete('/loai-thuocs/{id}', [LoaiThuocController::class, 'destroy']);
     });
 
 // =========================
@@ -177,6 +181,7 @@ Route::prefix('hoa-dons')
         Route::post('/', [HoaDonController::class, 'store']);
         Route::get('/{id}', [HoaDonController::class, 'show']);
         Route::post('/{id}/confirm', [HoaDonController::class, 'confirm']);
+        Route::post('/{id}/reject', [HoaDonController::class, 'reject']);
 
         // Nhan vien/Admin - Chi tiet hoa don
         Route::get('/{id_hoa_don}/chi-tiets', [ChiTietHoaDonController::class, 'indexByHoaDon']);
@@ -185,6 +190,23 @@ Route::prefix('hoa-dons')
         // Nhan vien/Admin - Lich su don hang theo hoa don
         Route::get('/{id_hoa_don}/lich-su', [LichSuDonHangController::class, 'indexByHoaDon']);
         Route::post('/{id_hoa_don}/lich-su', [LichSuDonHangController::class, 'store']);
+    });
+
+Route::prefix('ban-tai-quay')
+    ->middleware(['auth:sanctum', 'nhan_vien.role:admin,staff'])
+    ->group(function () {
+        Route::post('/khach-hang/dang-nhap', [CounterSaleController::class, 'authenticateCustomer']);
+        Route::post('/khach-hang/so-dien-thoai', [CounterSaleController::class, 'findCustomerByPhone']);
+        Route::post('/payos', [CounterSaleController::class, 'createPayos']);
+        Route::get('/payos/{sessionKey}', [CounterSaleController::class, 'payosStatus']);
+        Route::post('/payos/{sessionKey}/cancel', [CounterSaleController::class, 'cancelPayos']);
+        Route::post('/hoa-don', [CounterSaleController::class, 'store']);
+    });
+
+Route::prefix('dashboard')
+    ->middleware(['auth:sanctum', 'nhan_vien.role:admin,staff'])
+    ->group(function () {
+        Route::get('/staff-performance', [DashboardAnalyticsController::class, 'staffPerformance']);
     });
 
 Route::prefix('chi-tiet-hoa-dons')
@@ -258,11 +280,21 @@ Route::prefix('ma-giam-gias')
         Route::delete('/{id}', [MaGiamGiaController::class, 'destroy'])->whereNumber('id');
     });
 
+Route::prefix('thong-bao-khach-hangs')
+    ->middleware(['auth:sanctum', 'nhan_vien.role:admin,staff'])
+    ->group(function () {
+        Route::get('/', [ThongBaoKhachHangController::class, 'index']);
+        Route::post('/', [ThongBaoKhachHangController::class, 'store']);
+        Route::put('/{id}', [ThongBaoKhachHangController::class, 'update'])->whereNumber('id');
+        Route::delete('/{id}', [ThongBaoKhachHangController::class, 'destroy'])->whereNumber('id');
+    });
+
 Route::prefix('lo-thuocs')
     ->middleware(['auth:sanctum', 'nhan_vien.role:admin,staff'])
     ->group(function () {
         // Nhan vien/Admin - Lo thuoc (read only o nhom nay)
         Route::get('/search', [LoThuocController::class, 'search']);
+        Route::get('/alerts', [LoThuocController::class, 'alerts']);
         Route::get('/', [LoThuocController::class, 'index']);
         Route::get('/{id}', [LoThuocController::class, 'show']);
     });
@@ -278,17 +310,36 @@ Route::prefix('profile')
         Route::get('/', [AuthController::class, 'profile']);
         Route::put('/', [AuthController::class, 'updateProfile']);
         Route::put('/change-password', [AuthController::class, 'changePassword']);
+        Route::get('/addresses', [CustomerAddressController::class, 'index']);
+        Route::post('/addresses', [CustomerAddressController::class, 'store']);
+        Route::put('/addresses/{id}', [CustomerAddressController::class, 'update'])->whereNumber('id');
+        Route::delete('/addresses/{id}', [CustomerAddressController::class, 'destroy'])->whereNumber('id');
     });
 
 Route::prefix('checkout')
     ->middleware(['auth:sanctum'])
     ->group(function () {
+        Route::post('/orders/payos-cancel', [CustomerOrderController::class, 'cancelPayos']);
         Route::get('/orders', [CustomerOrderController::class, 'index']);
         Route::post('/orders', [CustomerOrderController::class, 'store']);
     });
 
+Route::prefix('support')
+    ->group(function () {
+        Route::get('/conversation', [SupportChatController::class, 'customerConversation']);
+        Route::post('/conversation/messages', [SupportChatController::class, 'customerSendMessage']);
+        Route::post('/conversation/guest/disconnect', [SupportChatController::class, 'guestDisconnect']);
+    });
+
 Route::post('/ma-giam-gias/validate-code', [MaGiamGiaController::class, 'validateCode'])
     ->middleware(['auth:sanctum']);
+Route::get('/thong-bao-khach-hangs/customer-list', [ThongBaoKhachHangController::class, 'customerList'])
+    ->middleware(['auth:sanctum']);
+Route::post('/thong-bao-khach-hangs/mark-all-read', [ThongBaoKhachHangController::class, 'markAllRead'])
+    ->middleware(['auth:sanctum']);
+Route::post('/thong-bao-khach-hangs/{id}/mark-read', [ThongBaoKhachHangController::class, 'markRead'])
+    ->middleware(['auth:sanctum'])
+    ->whereNumber('id');
 Route::get('/ma-giam-gias/customer-list', [MaGiamGiaController::class, 'customerList'])
     ->middleware(['auth:sanctum']);
 Route::get('/ma-giam-gias/customer-available', [MaGiamGiaController::class, 'customerAvailable'])
@@ -330,10 +381,12 @@ Route::prefix('nha-san-xuats')
         Route::get('/{id}', [NhaSanXuatController::class, 'show']);
     });
 
-Route::prefix('loai-thuocs')
+Route::prefix('support')
     ->middleware(['auth:sanctum', 'nhan_vien.role:admin,staff'])
     ->group(function () {
-        // Nhan vien/Admin - Loai thuoc (read only)
-        Route::get('/', [LoaiThuocController::class, 'index']);
-        Route::get('/{id}', [LoaiThuocController::class, 'show']);
+        Route::get('/conversations', [SupportChatController::class, 'staffConversationIndex']);
+        Route::get('/conversations/{id}', [SupportChatController::class, 'staffConversationShow'])->whereNumber('id');
+        Route::post('/conversations/{id}/messages', [SupportChatController::class, 'staffSendMessage'])->whereNumber('id');
+        Route::post('/conversations/{id}/close', [SupportChatController::class, 'staffCloseConversation'])->whereNumber('id');
+        Route::delete('/conversations/{id}', [SupportChatController::class, 'staffDeleteConversation'])->whereNumber('id');
     });

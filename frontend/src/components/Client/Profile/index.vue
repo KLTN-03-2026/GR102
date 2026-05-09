@@ -21,6 +21,21 @@
               </div>
             </div>
 
+            <div class="pc-reward-summary">
+              <div class="pc-reward-summary__label">
+                <span>Điểm thưởng hiện có</span>
+                <button
+                  type="button"
+                  class="pc-info-icon"
+                  aria-label="1000 điểm giảm được 10000"
+                  @click="openRewardInfoModal"
+                >
+                  <i class="bi bi-info-circle"></i>
+                </button>
+              </div>
+              <strong>{{ formatNumber(state.profile.pxu) }} điểm</strong>
+            </div>
+
             <nav class="pc-account-nav">
               <RouterLink
                 v-for="item in menuItems"
@@ -74,7 +89,13 @@
 
               <div class="pc-form-field">
                 <label>Email</label>
-                <input v-model="profileDraft.email" type="email" />
+                <input
+                  v-model="profileDraft.email"
+                  class="pc-input-locked"
+                  type="email"
+                  disabled
+                  title="Email là thông tin duy nhất, không thể chỉnh sửa."
+                />
               </div>
 
               <div class="pc-form-field">
@@ -84,7 +105,10 @@
 
               <div class="pc-form-field">
                 <label>Ngày sinh</label>
-                <input v-model="profileDraft.ngaySinh" type="date" />
+                <DatePickerInput
+                  v-model="profileDraft.ngaySinh"
+                  placeholder="dd/mm/yyyy"
+                />
               </div>
 
               <div class="pc-form-field">
@@ -100,10 +124,56 @@
               <div class="pc-form-field">
                 <label>Mật khẩu</label>
                 <div class="pc-password-row">
-                  <input type="password" value="123456789" disabled />
-                  <button type="button" @click="showPasswordHint = !showPasswordHint">Cập nhật</button>
+                  <input type="text" value="Mật khẩu đã được bảo mật" disabled />
+                  <button type="button" @click="togglePasswordForm">
+                    {{ showPasswordForm ? "Đóng" : "Cập nhật" }}
+                  </button>
                 </div>
-                <small v-if="showPasswordHint">Chức năng đổi mật khẩu sẽ dùng API riêng ở bước sau.</small>
+                <div v-if="showPasswordForm" class="pc-password-form">
+                  <div class="pc-password-form__grid">
+                    <div class="pc-form-field">
+                      <label>Mật khẩu hiện tại</label>
+                      <input
+                        v-model="passwordDraft.currentPassword"
+                        type="password"
+                        autocomplete="current-password"
+                        :class="{ 'is-invalid': passwordErrors.currentPassword }"
+                        @input="clearPasswordError('currentPassword')"
+                      />
+                      <div v-if="passwordErrors.currentPassword" class="pc-field-error">{{ passwordErrors.currentPassword }}</div>
+                    </div>
+                    <div class="pc-form-field">
+                      <label>Mật khẩu mới</label>
+                      <input
+                        v-model="passwordDraft.newPassword"
+                        type="password"
+                        autocomplete="new-password"
+                        :class="{ 'is-invalid': passwordErrors.newPassword }"
+                        @input="clearPasswordError('newPassword')"
+                      />
+                      <div v-if="passwordErrors.newPassword" class="pc-field-error">{{ passwordErrors.newPassword }}</div>
+                    </div>
+                    <div class="pc-form-field">
+                      <label>Xác nhận mật khẩu mới</label>
+                      <input
+                        v-model="passwordDraft.confirmPassword"
+                        type="password"
+                        autocomplete="new-password"
+                        :class="{ 'is-invalid': passwordErrors.confirmPassword }"
+                        @input="clearPasswordError('confirmPassword')"
+                      />
+                      <div v-if="passwordErrors.confirmPassword" class="pc-field-error">{{ passwordErrors.confirmPassword }}</div>
+                    </div>
+                  </div>
+                  <div class="pc-password-form__actions">
+                    <button type="button" class="btn btn-outline-secondary rounded-pill px-4" @click="cancelPasswordForm">
+                      Hủy
+                    </button>
+                    <button type="button" class="btn btn-primary rounded-pill px-4" @click="submitPasswordChange">
+                      Đổi mật khẩu
+                    </button>
+                  </div>
+                </div>
               </div>
             </div>
 
@@ -124,11 +194,12 @@
 
             <div class="pc-address-list">
               <article v-for="address in state.addresses" :key="address.id" class="pc-address-card">
-                <div>
-                  <h3>{{ address.hoTen }} | {{ address.soDienThoai }}</h3>
-                  <p>{{ formatFullAddress(address) }}</p>
+                <div class="pc-address-card__content">
+                  <h3 :title="`${address.hoTen} | ${address.soDienThoai}`">{{ address.hoTen }} | {{ address.soDienThoai }}</h3>
+                  <p :title="formatFullAddress(address)">{{ formatFullAddress(address) }}</p>
                 </div>
                 <div class="pc-address-card__actions">
+                  <span v-if="address.macDinh" class="pc-address-card__tag pc-address-card__tag--default">Mặc định</span>
                   <span class="pc-address-card__tag">{{ address.loaiDiaChi }}</span>
                   <button type="button" class="btn btn-sm btn-outline-primary" @click="openEditAddressModal(address)">
                     Chỉnh sửa
@@ -151,10 +222,29 @@
                   <strong class="pc-history-card__code">{{ order.id }}</strong>
                   <div class="pc-history-card__meta">
                     <p>{{ order.ngay }} • {{ order.sanPham }} sản phẩm</p>
+                    <small v-if="order.phuongThucThanhToanLabel">{{ order.phuongThucThanhToanLabel }}</small>
                   </div>
                   <div class="pc-history-card__summary">
                     <div class="pc-history-card__status">{{ order.trangThai }}</div>
-                    <strong>{{ formatCurrency(order.tongTien) }}</strong>
+                    <div class="pc-history-card__total">
+                      <span>Tổng thanh toán</span>
+                      <strong>{{ formatCurrency(order.tongTien) }}</strong>
+                    </div>
+                    <button
+                      v-if="canContinuePayosPayment(order)"
+                      type="button"
+                      class="pc-history-card__payos"
+                      @click.stop="continuePayosPayment(order)"
+                    >
+                      Tiếp tục thanh toán
+                    </button>
+                    <button
+                      type="button"
+                      class="pc-history-card__reorder"
+                      @click.stop="reorderOrder(order)"
+                    >
+                      Mua lại
+                    </button>
                     <button
                       type="button"
                       class="pc-history-card__toggle"
@@ -162,27 +252,120 @@
                     >
                       {{ expandedOrderId === order.id ? "Thu gọn" : "Xem sản phẩm đã mua" }}
                     </button>
-                    <button
-                      type="button"
-                      class="pc-history-card__delete"
-                      @click.stop="removeOrderItem(order.id)"
-                    >
-                      Xóa
-                    </button>
                   </div>
                 </div>
 
                 <div v-if="expandedOrderId === order.id" class="pc-history-card__details">
+                  <div class="pc-history-card__overview">
+                    <section class="pc-history-info">
+                      <span class="pc-history-info__label">Người nhận</span>
+                      <strong>{{ order.nguoiNhan || state.profile.hoTen }}</strong>
+                      <p v-if="order.soDienThoaiNhan">{{ order.soDienThoaiNhan }}</p>
+                      <p v-if="order.diaChiGiaoHang">{{ order.diaChiGiaoHang }}</p>
+                    </section>
+
+                    <section class="pc-history-info">
+                      <span class="pc-history-info__label">Thanh toán</span>
+                      <strong>{{ order.phuongThucThanhToanLabel || "Tiền mặt" }}</strong>
+                      <p v-if="order.trangThaiThanhToan">Trạng thái: {{ paymentStatusLabel(order.trangThaiThanhToan) }}</p>
+                      <p v-if="order.thoiGianThanhToan">Ghi nhận: {{ formatDateTime(order.thoiGianThanhToan) }}</p>
+                      <p v-if="order.maGiaoDich">Mã giao dịch: {{ order.maGiaoDich }}</p>
+                      <button
+                        v-if="canContinuePayosPayment(order)"
+                        type="button"
+                        class="pc-history-info__payos"
+                        @click="continuePayosPayment(order)"
+                      >
+                        Mở lại PayOS
+                      </button>
+                    </section>
+
+                    <section class="pc-history-info pc-history-info--totals">
+                      <span class="pc-history-info__label">Chi tiết tiền</span>
+                      <div class="pc-history-info__row">
+                        <span>Tạm tính</span>
+                        <strong>{{ formatCurrency(order.tamTinh) }}</strong>
+                      </div>
+                      <div v-if="order.giamGiaMa > 0" class="pc-history-info__row">
+                        <span>Mã giảm giá{{ order.maGiamGia ? ` (${order.maGiamGia})` : "" }}</span>
+                        <strong class="text-success">-{{ formatCurrency(order.giamGiaMa) }}</strong>
+                      </div>
+                      <div v-if="order.giamGiaDiem > 0" class="pc-history-info__row">
+                        <span>Điểm thưởng</span>
+                        <strong class="text-success">-{{ formatCurrency(order.giamGiaDiem) }}</strong>
+                      </div>
+                      <div v-if="order.giamGia > 0 && !order.giamGiaMa && !order.giamGiaDiem" class="pc-history-info__row">
+                        <span>Giảm giá</span>
+                        <strong class="text-success">-{{ formatCurrency(order.giamGia) }}</strong>
+                      </div>
+                      <div v-if="!order.giamGia" class="pc-history-info__row">
+                        <span>Giảm giá</span>
+                        <strong>{{ formatCurrency(0) }}</strong>
+                      </div>
+                      <div class="pc-history-info__row">
+                        <span>VAT</span>
+                        <strong>{{ formatCurrency(order.thueVat) }}</strong>
+                      </div>
+                      <div v-if="order.diemDaSuDung > 0" class="pc-history-info__row pc-history-info__row--points">
+                        <span>Điểm đã dùng</span>
+                        <strong>-{{ formatNumber(order.diemDaSuDung) }} điểm</strong>
+                      </div>
+                      <div v-if="order.diemDaCong > 0" class="pc-history-info__row pc-history-info__row--points">
+                        <span>Điểm đã cộng</span>
+                        <strong class="text-primary">+{{ formatNumber(order.diemDaCong) }} điểm</strong>
+                      </div>
+                      <div class="pc-history-info__row pc-history-info__row--total">
+                        <span>Tổng thanh toán</span>
+                        <strong>{{ formatCurrency(order.tongTien) }}</strong>
+                      </div>
+                    </section>
+                  </div>
+
+                  <div v-if="order.ghiChu || order.ghiChuHeThong" class="pc-history-card__notes">
+                    <div v-if="order.ghiChu" class="pc-history-note">
+                      <span class="pc-history-info__label">Ghi chú đơn hàng</span>
+                      <p>{{ order.ghiChu }}</p>
+                    </div>
+                    <div v-if="order.ghiChuHeThong" class="pc-history-note">
+                      <span class="pc-history-info__label">Lưu ý hệ thống</span>
+                      <p>{{ order.ghiChuHeThong }}</p>
+                    </div>
+                  </div>
+
+                  <div v-if="order.timeline && order.timeline.length" class="pc-history-timeline">
+                    <div
+                      v-for="event in order.timeline"
+                      :key="`${order.id}-${event.id}`"
+                      class="pc-history-timeline__item"
+                    >
+                      <span class="pc-history-timeline__dot"></span>
+                      <div class="pc-history-timeline__content">
+                        <strong>{{ event.label }}</strong>
+                        <p>{{ formatDateTime(event.thoiGian) }}</p>
+                        <small v-if="event.moTa">{{ event.moTa }}</small>
+                      </div>
+                    </div>
+                  </div>
+
                   <article v-for="item in order.items || []" :key="`${order.id}-${item.id}`" class="pc-history-product">
-                    <div class="pc-history-product__thumb" :class="`tone-${item.imageTone || 'pink'}`"></div>
+                    <div class="pc-history-product__thumb" :class="`tone-${item.imageTone || 'pink'}`">
+                      <img
+                        v-if="item.hinhAnhUrl"
+                        :src="item.hinhAnhUrl"
+                        :alt="item.ten"
+                        style="width: 100%; height: 100%; object-fit: cover; display: block; border-radius: inherit"
+                      />
+                    </div>
                     <div class="pc-history-product__content">
                       <strong>{{ item.ten }}</strong>
                       <p v-if="item.loai">Loại: {{ item.loai }}</p>
+                      <p v-if="item.donVi">Phân loại: {{ item.donVi }}</p>
                       <p v-if="item.moTa">{{ item.moTa }}</p>
                     </div>
                     <div class="pc-history-product__meta">
-                      <span>x{{ item.soLuong }}</span>
-                      <strong>{{ formatCurrency(item.gia) }}</strong>
+                      <span>{{ item.soLuong }} x {{ formatCurrency(item.gia) }}</span>
+                      <small>Thành tiền</small>
+                      <strong>{{ formatCurrency(item.thanhTien || item.gia * item.soLuong) }}</strong>
                     </div>
                   </article>
 
@@ -285,6 +468,24 @@
       </div>
     </div>
 
+    <div v-if="showRewardInfoModal" class="pc-modal-backdrop" @click.self="closeRewardInfoModal">
+      <div class="pc-modal-card pc-modal-card--reward-info">
+        <button class="pc-modal-card__close" type="button" @click="closeRewardInfoModal">
+          <i class="bi bi-x-lg"></i>
+        </button>
+
+        <div class="pc-reward-modal">
+          <div class="pc-reward-modal__icon">
+            <i class="bi bi-info-circle"></i>
+          </div>
+          <div>
+            <h2>Điểm thưởng</h2>
+            <p>1000 điểm giảm được 10000</p>
+          </div>
+        </div>
+      </div>
+    </div>
+
     <div v-if="showAddressModal" class="pc-modal-backdrop" @click.self="closeAddressModal">
       <div class="pc-modal-card pc-modal-card--form">
         <button class="pc-modal-card__close" type="button" @click="closeAddressModal">
@@ -296,12 +497,29 @@
         <div class="pc-address-form">
           <div class="pc-form-field">
             <label>Họ và tên</label>
-            <input v-model="addressDraft.hoTen" type="text" placeholder="Nhập họ và tên" />
+            <input
+              v-model="addressDraft.hoTen"
+              type="text"
+              maxlength="30"
+              placeholder="Nhập họ và tên"
+              :class="{ 'is-invalid': addressErrors.hoTen }"
+              @input="handleAddressNameInput"
+            />
+            <div v-if="addressErrors.hoTen" class="pc-field-error">{{ addressErrors.hoTen }}</div>
           </div>
 
           <div class="pc-form-field">
             <label>Số điện thoại</label>
-            <input v-model="addressDraft.soDienThoai" type="text" placeholder="Nhập số điện thoại" />
+            <input
+              v-model="addressDraft.soDienThoai"
+              type="tel"
+              inputmode="numeric"
+              maxlength="10"
+              placeholder="Nhập số điện thoại"
+              :class="{ 'is-invalid': addressErrors.soDienThoai }"
+              @input="handleAddressPhoneInput"
+            />
+            <div v-if="addressErrors.soDienThoai" class="pc-field-error">{{ addressErrors.soDienThoai }}</div>
           </div>
 
           <div class="pc-form-field">
@@ -366,16 +584,33 @@
 </template>
 
 <script>
+import DatePickerInput from "../../Common/DatePickerInput.vue";
 import { getAuthType } from "../../../lib/authStorage";
 import { getCustomerOrderDiscountCodes } from "../../../api/pricingApi";
+import { changePasswordApi } from "../../../api/profileApi";
 import { useCustomerStore } from "../../../lib/customerStore";
+import { formatDateInputValue, parseDateInputValue } from "../../../lib/dateInput";
+import { translateErrorMessage } from "../../../lib/errorMessages";
+import { validateStrongPassword } from "../../../lib/passwordRules";
 import { showToast } from "../../../lib/toast";
+
+function normalizePhoneDigits(value) {
+  return String(value || "").replace(/\D/g, "").slice(0, 10);
+}
+
+function normalizeAddressName(value) {
+  return String(value || "").replace(/\s+/g, " ").trim().slice(0, 30);
+}
+
+function limitAddressNameInput(value) {
+  return String(value || "").replace(/\s+/g, " ").slice(0, 30);
+}
 
 function createEmptyAddressDraft(profile) {
   return {
     id: null,
-    hoTen: profile.hoTen || "",
-    soDienThoai: String(profile.soDienThoai || "").replaceAll("*", "0"),
+    hoTen: normalizeAddressName(profile.hoTen),
+    soDienThoai: normalizePhoneDigits(String(profile.soDienThoai || "").replaceAll("*", "0")),
     tinhThanh: "",
     quanHuyen: "",
     phuongXa: "",
@@ -406,6 +641,8 @@ const LOCATION_OPTIONS = {
 function normalizeAddressDraft(address) {
   const draft = {
     ...address,
+    hoTen: normalizeAddressName(address?.hoTen),
+    soDienThoai: normalizePhoneDigits(address?.soDienThoai),
     tinhThanh: address?.tinhThanh || "",
     quanHuyen: address?.quanHuyen || "",
     phuongXa: address?.phuongXa || "",
@@ -426,6 +663,9 @@ function normalizeAddressDraft(address) {
 
 export default {
   name: "ProfileClient",
+  components: {
+    DatePickerInput,
+  },
 
   data() {
     const customerStore = useCustomerStore();
@@ -435,12 +675,13 @@ export default {
       customerStore,
       state,
       showAddressModal: false,
-      showPasswordHint: false,
+      showPasswordForm: false,
       activeTab: "Đơn hàng",
       avatarFile: null,
       avatarLoadFailed: false,
       avatarObjectUrl: "",
       avatarPreviewUrl: state.profile.avatarUrl || "",
+      showRewardInfoModal: false,
       discountCodesLoading: false,
       discountCodes: [],
       expandedOrderId: null,
@@ -452,15 +693,28 @@ export default {
         { section: "ma-giam-gia", label: "Mã giảm giá", icon: "bi bi-ticket-perforated", to: "/tai-khoan/ma-giam-gia" },
         { section: "thong-bao", label: "Thông báo của tôi", icon: "bi bi-bell", to: "/tai-khoan/thong-bao" },
         { section: "thanh-toan", label: "Quản lý thanh toán", icon: "bi bi-credit-card", to: "/tai-khoan/thanh-toan" },
-        { section: "gia-dinh", label: "Hồ sơ gia đình", icon: "bi bi-people", to: "/tai-khoan/gia-dinh" },
       ],
       profileDraft: {
         hoTen: state.profile.hoTen,
         soDienThoai: state.profile.soDienThoai,
         email: state.profile.email,
         diaChi: state.profile.diaChi,
-        ngaySinh: state.profile.ngaySinh,
+        ngaySinh: formatDateInputValue(state.profile.ngaySinh),
         gioiTinh: state.profile.gioiTinh,
+      },
+      passwordDraft: {
+        currentPassword: "",
+        newPassword: "",
+        confirmPassword: "",
+      },
+      passwordErrors: {
+        currentPassword: "",
+        newPassword: "",
+        confirmPassword: "",
+      },
+      addressErrors: {
+        hoTen: "",
+        soDienThoai: "",
       },
       addressDraft: createEmptyAddressDraft(state.profile),
     };
@@ -502,7 +756,7 @@ export default {
           soDienThoai: value.soDienThoai || "",
           email: value.email || "",
           diaChi: value.diaChi || "",
-          ngaySinh: value.ngaySinh || "",
+          ngaySinh: formatDateInputValue(value.ngaySinh),
           gioiTinh: value.gioiTinh || "",
         };
       },
@@ -520,6 +774,11 @@ export default {
     section: {
       immediate: true,
       handler(nextSection) {
+        if (!this.isValidSection(nextSection)) {
+          this.$router.replace("/tai-khoan/thong-tin");
+          return;
+        }
+
         if (nextSection === "ma-giam-gia") {
           this.loadDiscountCodes();
         }
@@ -561,6 +820,7 @@ export default {
 
   mounted() {
     this.customerStore.refreshProfileFromApi();
+    this.customerStore.syncAddressesFromApi();
     this.customerStore.syncOrdersFromApi();
     this.syncNotificationRouteState();
   },
@@ -572,12 +832,185 @@ export default {
   },
 
   methods: {
+    isValidSection(section) {
+      return this.menuItems.some((item) => item.section === section);
+    },
     formatCurrency(value) {
       return new Intl.NumberFormat("vi-VN", {
         style: "currency",
         currency: "VND",
         maximumFractionDigits: 0,
       }).format(Number(value || 0));
+    },
+    formatNumber(value) {
+      return new Intl.NumberFormat("vi-VN", {
+        maximumFractionDigits: 0,
+      }).format(Number(value || 0));
+    },
+    formatDateTime(value) {
+      if (!value) {
+        return "Đang cập nhật";
+      }
+
+      const date = new Date(value);
+      if (Number.isNaN(date.getTime())) {
+        return "Đang cập nhật";
+      }
+
+      return new Intl.DateTimeFormat("vi-VN", {
+        day: "2-digit",
+        month: "2-digit",
+        year: "numeric",
+        hour: "2-digit",
+        minute: "2-digit",
+      }).format(date);
+    },
+    normalizePaymentStatus(value) {
+      return String(value || "")
+        .trim()
+        .toLowerCase()
+        .normalize("NFD")
+        .replace(/[\u0300-\u036f]/g, "")
+        .replace(/đ/g, "d")
+        .replace(/[^a-z0-9]+/g, "_")
+        .replace(/^_+|_+$/g, "");
+    },
+    paymentStatusLabel(value) {
+      const status = this.normalizePaymentStatus(value);
+      const labels = {
+        pending: "Chờ thanh toán",
+        unpaid: "Chờ thanh toán",
+        cho_thanh_toan: "Chờ thanh toán",
+        paid: "Đã thanh toán",
+        success: "Đã thanh toán",
+        completed: "Đã thanh toán",
+        da_thanh_toan: "Đã thanh toán",
+        thanh_toan_thanh_cong: "Đã thanh toán",
+        failed: "Thanh toán thất bại",
+        fail: "Thanh toán thất bại",
+        cancelled: "Đã hủy thanh toán",
+        canceled: "Đã hủy thanh toán",
+        da_huy: "Đã hủy thanh toán",
+        expired: "Link đã hết hạn",
+        het_han: "Link đã hết hạn",
+      };
+
+      return labels[status] || value || "Đang cập nhật";
+    },
+    getPayosCheckoutUrl(order) {
+      return order?.payosCheckoutUrl || order?.payos?.checkout_url || order?.payos?.checkoutUrl || "";
+    },
+    canContinuePayosPayment(order) {
+      const method = String(order?.phuongThucThanhToan || "").trim().toLowerCase();
+      const methodLabel = String(order?.phuongThucThanhToanLabel || "").trim().toLowerCase();
+
+      if (method !== "payos" && !methodLabel.includes("payos")) {
+        return false;
+      }
+
+      if (!this.getPayosCheckoutUrl(order)) {
+        return false;
+      }
+
+      const orderStatus = this.normalizePaymentStatus(order?.trangThaiXuLy || order?.trangThai || "");
+      const completedOrderStatuses = new Set([
+        "da_xac_nhan",
+        "hoan_thanh",
+        "thanh_cong",
+        "completed",
+        "complete",
+        "success",
+      ]);
+
+      if (completedOrderStatuses.has(orderStatus)) {
+        return false;
+      }
+
+      const status = this.normalizePaymentStatus(order?.trangThaiThanhToan || order?.payosStatus || order?.payos?.status || "");
+      const completedPaymentStatuses = new Set([
+        "paid",
+        "success",
+        "completed",
+        "complete",
+        "succeeded",
+        "da_thanh_toan",
+        "thanh_toan_thanh_cong",
+      ]);
+      const stoppedPaymentStatuses = new Set([
+        "failed",
+        "fail",
+        "that_bai",
+        "cancelled",
+        "canceled",
+        "da_huy",
+        "expired",
+        "het_han",
+      ]);
+
+      if (
+        completedPaymentStatuses.has(status) ||
+        order?.payosPaidAt ||
+        order?.payos?.paid_at ||
+        order?.payos?.paidAt
+      ) {
+        return false;
+      }
+
+      if (stoppedPaymentStatuses.has(status)) {
+        return false;
+      }
+
+      const pendingStatuses = new Set([
+        "pending",
+        "unpaid",
+        "cho_thanh_toan",
+        "dang_cho_thanh_toan",
+        "waiting",
+      ]);
+
+      return pendingStatuses.has(status) || !status;
+    },
+    async continuePayosPayment(order) {
+      let currentOrder = order;
+
+      try {
+        await this.customerStore.syncOrdersFromApi({ silent: false });
+        const orderId = String(order?.id || "");
+        const invoiceId = String(order?.idHoaDon || order?.id_hoa_don || "");
+
+        currentOrder = this.state.orders.find((item) =>
+          (orderId && String(item.id || "") === orderId) ||
+          (invoiceId && String(item.idHoaDon || item.id_hoa_don || "") === invoiceId)
+        ) || order;
+      } catch {
+        currentOrder = order;
+      }
+
+      if (!this.canContinuePayosPayment(currentOrder)) {
+        const status = this.normalizePaymentStatus(
+          currentOrder?.trangThaiThanhToan ||
+            currentOrder?.payosStatus ||
+            currentOrder?.payos?.status ||
+            ""
+        );
+
+        if (["paid", "success", "completed", "complete", "succeeded", "da_thanh_toan", "thanh_toan_thanh_cong"].includes(status)) {
+          showToast("Đơn hàng đã thanh toán thành công, đang chờ nhân viên xác nhận.");
+          return;
+        }
+
+        showToast("Đơn hàng này không còn ở trạng thái chờ thanh toán.", "error");
+        return;
+      }
+
+      const checkoutUrl = this.getPayosCheckoutUrl(currentOrder);
+
+      if (!checkoutUrl) {
+        showToast("Không tìm thấy link PayOS cho đơn hàng này.", "error");
+        return;
+      }
+
+      window.location.href = checkoutUrl;
     },
     promotionValueLabel(item) {
       if (item.loai_ap_dung === "phan_tram") {
@@ -588,16 +1021,97 @@ export default {
     formatFullAddress(address) {
       return [address.soNha, address.phuongXa, address.quanHuyen, address.tinhThanh].filter(Boolean).join(", ");
     },
+    openRewardInfoModal() {
+      this.showRewardInfoModal = true;
+    },
+    closeRewardInfoModal() {
+      this.showRewardInfoModal = false;
+    },
     extractErrorMessage(error, fallbackMessage) {
       const fieldErrors = error?.payload?.errors || error?.response?.data?.errors;
 
       if (fieldErrors && typeof fieldErrors === "object") {
         const firstField = Object.keys(fieldErrors)[0];
         const firstMessage = Array.isArray(fieldErrors[firstField]) ? fieldErrors[firstField][0] : fieldErrors[firstField];
-        if (firstMessage) return firstMessage;
+        if (firstMessage) return this.translateProfileValidationMessage(firstMessage, firstField);
       }
 
-      return error?.payload?.message || error?.response?.data?.message || error?.message || fallbackMessage;
+      const message = error?.payload?.message || error?.response?.data?.message || error?.message || fallbackMessage;
+      return this.translateProfileValidationMessage(message);
+    },
+    translateProfileValidationMessage(message, field = "") {
+      const rawMessage = String(message || "").trim();
+
+      if (!rawMessage) {
+        return "Không thể thực hiện yêu cầu. Vui lòng thử lại.";
+      }
+
+      const fieldLabels = {
+        ten_khach_hang: "họ và tên",
+        "ten khach hang": "họ và tên",
+        ho_ten: "họ và tên",
+        "ho ten": "họ và tên",
+        so_dien_thoai: "số điện thoại",
+        "so dien thoai": "số điện thoại",
+        email: "email",
+        dia_chi: "địa chỉ",
+        "dia chi": "địa chỉ",
+        ngay_sinh: "ngày sinh",
+        "ngay sinh": "ngày sinh",
+        gioi_tinh: "giới tính",
+        "gioi tinh": "giới tính",
+        avatar: "ảnh đại diện",
+      };
+      const normalized = rawMessage
+        .toLowerCase()
+        .normalize("NFD")
+        .replace(/[\u0300-\u036f]/g, "")
+        .replace(/đ/g, "d");
+
+      const englishFieldMatch = normalized.match(/^the (.+?) field /);
+      const selectedFieldMatch = normalized.match(/^the selected (.+?) is invalid/);
+      const fieldKey = englishFieldMatch?.[1] || selectedFieldMatch?.[1] || "";
+      const fieldLabel = fieldLabels[fieldKey] || fieldLabels[fieldKey.replace(/\s+/g, "_")] || "thông tin";
+
+      if (normalized.includes("field is required")) {
+        return `Vui lòng nhập ${fieldLabel}.`;
+      }
+
+      if (normalized.includes("must be at least")) {
+        const minValue = normalized.match(/at least (\d+)/)?.[1];
+        return `${this.capitalizeFirst(fieldLabel)} phải có ít nhất ${minValue || ""} ký tự.`.replace("  ", " ");
+      }
+
+      if (normalized.includes("may not be greater than")) {
+        const maxValue = normalized.match(/greater than (\d+)/)?.[1];
+        return `${this.capitalizeFirst(fieldLabel)} không được vượt quá ${maxValue || ""} ký tự.`.replace("  ", " ");
+      }
+
+      if (normalized.includes("must be a valid email")) {
+        return "Email không hợp lệ.";
+      }
+
+      if (normalized.includes("has already been taken")) {
+        return `${this.capitalizeFirst(fieldLabel)} này đã được sử dụng.`;
+      }
+
+      if (normalized.includes("must be a date") || normalized.includes("not a valid date")) {
+        return "Ngày sinh không hợp lệ.";
+      }
+
+      if (normalized.includes("selected") && normalized.includes("is invalid")) {
+        return "Giới tính chỉ được chọn Nam, Nữ hoặc Khác.";
+      }
+
+      if (normalized.includes("must be an image")) {
+        return "Ảnh đại diện phải là tệp hình ảnh.";
+      }
+
+      return translateErrorMessage(rawMessage, field, fieldLabels);
+    },
+    capitalizeFirst(value) {
+      const text = String(value || "");
+      return text ? text.charAt(0).toUpperCase() + text.slice(1) : text;
     },
     async loadDiscountCodes() {
       this.discountCodesLoading = true;
@@ -633,8 +1147,65 @@ export default {
     handleAvatarError() {
       this.avatarLoadFailed = true;
     },
+    togglePasswordForm() {
+      this.showPasswordForm = !this.showPasswordForm;
+
+      if (!this.showPasswordForm) {
+        this.resetPasswordDraft();
+      }
+    },
+    cancelPasswordForm() {
+      this.showPasswordForm = false;
+      this.resetPasswordDraft();
+    },
+    resetPasswordDraft() {
+      this.passwordDraft = {
+        currentPassword: "",
+        newPassword: "",
+        confirmPassword: "",
+      };
+      this.passwordErrors = {
+        currentPassword: "",
+        newPassword: "",
+        confirmPassword: "",
+      };
+    },
+    clearPasswordError(field) {
+      if (Object.prototype.hasOwnProperty.call(this.passwordErrors, field)) {
+        this.passwordErrors[field] = "";
+      }
+    },
+    validatePasswordDraft() {
+      const errors = {
+        currentPassword: "",
+        newPassword: "",
+        confirmPassword: "",
+      };
+
+      if (!this.passwordDraft.currentPassword) {
+        errors.currentPassword = "Vui lòng nhập mật khẩu hiện tại.";
+      }
+
+      errors.newPassword = validateStrongPassword(this.passwordDraft.newPassword, "Mật khẩu mới");
+
+      if (!this.passwordDraft.confirmPassword) {
+        errors.confirmPassword = "Vui lòng xác nhận mật khẩu mới.";
+      } else if (this.passwordDraft.confirmPassword !== this.passwordDraft.newPassword) {
+        errors.confirmPassword = "Xác nhận mật khẩu mới không khớp.";
+      }
+
+      this.passwordErrors = errors;
+      return !Object.values(errors).some(Boolean);
+    },
     async saveProfile() {
       try {
+        const birthDate = parseDateInputValue(this.profileDraft.ngaySinh);
+
+        if (this.profileDraft.ngaySinh && !birthDate) {
+          showToast("Ngày sinh phải theo định dạng dd/mm/yyyy.", "error");
+          return;
+        }
+
         const payload = new FormData();
         const authType = getAuthType();
 
@@ -645,10 +1216,12 @@ export default {
         }
 
         payload.append("so_dien_thoai", this.profileDraft.soDienThoai || "");
-        payload.append("email", this.profileDraft.email || "");
         payload.append("dia_chi", this.profileDraft.diaChi || "");
-        payload.append("ngay_sinh", this.profileDraft.ngaySinh || "");
         payload.append("gioi_tinh", this.profileDraft.gioiTinh || "");
+
+        if (birthDate) {
+          payload.append("ngay_sinh", birthDate);
+        }
 
         if (this.avatarFile) {
           payload.append("avatar", this.avatarFile);
@@ -669,28 +1242,77 @@ export default {
         showToast(this.extractErrorMessage(error, "Không thể cập nhật thông tin cá nhân."), "error");
       }
     },
+    async submitPasswordChange() {
+      if (!this.validatePasswordDraft()) {
+        showToast("Vui lòng kiểm tra lại các trường thông tin bên trên.", "error");
+        return;
+      }
+
+      try {
+        await changePasswordApi({
+          current_password: this.passwordDraft.currentPassword,
+          new_password: this.passwordDraft.newPassword,
+          new_password_confirmation: this.passwordDraft.confirmPassword,
+        });
+
+        this.cancelPasswordForm();
+        showToast("Đổi mật khẩu thành công.");
+      } catch (error) {
+        showToast(this.extractErrorMessage(error, "Không thể đổi mật khẩu."), "error");
+      }
+    },
     openAddAddressModal() {
       this.addressDraft = normalizeAddressDraft(createEmptyAddressDraft(this.state.profile));
+      this.resetAddressErrors();
       this.showAddressModal = true;
     },
     openEditAddressModal(address) {
       this.addressDraft = normalizeAddressDraft({ ...address });
+      this.resetAddressErrors();
       this.showAddressModal = true;
     },
     closeAddressModal() {
       this.showAddressModal = false;
       this.addressDraft = normalizeAddressDraft(createEmptyAddressDraft(this.state.profile));
+      this.resetAddressErrors();
+    },
+    resetAddressErrors() {
+      this.addressErrors = {
+        hoTen: "",
+        soDienThoai: "",
+      };
+    },
+    handleAddressNameInput() {
+      const rawName = String(this.addressDraft.hoTen || "");
+      this.addressDraft.hoTen = limitAddressNameInput(rawName);
+      this.addressErrors.hoTen = rawName.length > 30 ? "Họ tên người nhận không được vượt quá 30 ký tự." : "";
+    },
+    handleAddressPhoneInput() {
+      this.addressDraft.soDienThoai = normalizePhoneDigits(this.addressDraft.soDienThoai);
+      this.addressErrors.soDienThoai = "";
     },
     toggleOrderDetails(orderId) {
       this.expandedOrderId = this.expandedOrderId === orderId ? null : orderId;
     },
-    removeOrderItem(orderId) {
-      if (this.expandedOrderId === orderId) {
-        this.expandedOrderId = null;
-      }
+    async reorderOrder(order) {
+      try {
+        const result = await this.customerStore.reorderOrder(order);
 
-      this.customerStore.removeOrder(orderId);
-      showToast("Đã xóa đơn hàng khỏi lịch sử.");
+        if (!result.added) {
+          showToast("Không thể mua lại vì các sản phẩm trong đơn hiện không còn khả dụng.", "error");
+          return;
+        }
+
+        if (result.skipped.length) {
+          showToast(`Đã thêm ${result.added} sản phẩm vào giỏ. ${result.skipped.length} sản phẩm hiện không còn hàng.`, "warning");
+        } else {
+          showToast(`Đã thêm ${result.added} sản phẩm vào giỏ hàng.`);
+        }
+
+        this.$router.push("/gio-hang");
+      } catch (error) {
+        showToast(this.extractErrorMessage(error, "Không thể mua lại đơn hàng này."), "error");
+      }
     },
     syncNotificationRouteState() {
       const noticeId = String(this.$route.query.notice || "").trim();
@@ -720,18 +1342,56 @@ export default {
       this.customerStore.markAllNotificationsRead();
       showToast("Đã đánh dấu tất cả thông báo là đã đọc.");
     },
-    submitAddress() {
+    async submitAddress() {
       const normalizedDraft = normalizeAddressDraft({ ...this.addressDraft });
+      this.resetAddressErrors();
+
+      if (!normalizedDraft.hoTen) {
+        this.addressErrors.hoTen = "Vui lòng nhập họ tên người nhận.";
+        showToast("Vui lòng kiểm tra lại họ tên người nhận.", "error");
+        return;
+      }
+
+      if (normalizedDraft.hoTen.length > 30) {
+        this.addressErrors.hoTen = "Họ tên người nhận không được vượt quá 30 ký tự.";
+        showToast("Vui lòng kiểm tra lại họ tên người nhận.", "error");
+        return;
+      }
+
+      if (!/^\d{10}$/.test(normalizedDraft.soDienThoai)) {
+        this.addressErrors.soDienThoai = "Số điện thoại người nhận phải gồm đúng 10 chữ số.";
+        showToast("Vui lòng kiểm tra lại số điện thoại người nhận.", "error");
+        return;
+      }
 
       if (!normalizedDraft.tinhThanh || !normalizedDraft.quanHuyen || !normalizedDraft.phuongXa) {
         showToast("Vui lòng chọn đúng Tỉnh/Thành phố, Quận/Huyện và Phường/Xã.", "error");
         return;
       }
 
-      this.customerStore.saveAddress(normalizedDraft);
-      this.showAddressModal = false;
-      this.addressDraft = normalizeAddressDraft(createEmptyAddressDraft(this.state.profile));
-      showToast("Đã lưu địa chỉ nhận hàng.");
+      try {
+        await this.customerStore.saveAddress(normalizedDraft);
+        this.showAddressModal = false;
+        this.addressDraft = normalizeAddressDraft(createEmptyAddressDraft(this.state.profile));
+        this.resetAddressErrors();
+        showToast("Đã lưu địa chỉ nhận hàng.");
+      } catch (error) {
+        const fieldErrors = error?.payload?.errors || error?.response?.data?.errors;
+        const nameError = fieldErrors?.ho_ten;
+        const phoneError = fieldErrors?.so_dien_thoai;
+        const nameMessage = Array.isArray(nameError) ? nameError[0] : nameError;
+        const phoneMessage = Array.isArray(phoneError) ? phoneError[0] : phoneError;
+
+        if (nameMessage) {
+          this.addressErrors.hoTen = this.translateProfileValidationMessage(nameMessage, "ho_ten");
+        }
+
+        if (phoneMessage) {
+          this.addressErrors.soDienThoai = this.translateProfileValidationMessage(phoneMessage, "so_dien_thoai");
+        }
+
+        showToast(this.extractErrorMessage(error, "Không thể lưu địa chỉ nhận hàng."), "error");
+      }
     },
   },
 };
@@ -768,6 +1428,85 @@ export default {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+
+.pc-reward-summary {
+  display: grid;
+  gap: 4px;
+  margin: 16px 0 18px;
+  padding: 14px 16px;
+  border: 1px solid rgba(25, 135, 84, 0.14);
+  border-radius: 16px;
+  background: rgba(25, 135, 84, 0.06);
+}
+
+.pc-reward-summary span {
+  color: #5f7393;
+  font-size: 0.86rem;
+  font-weight: 700;
+}
+
+.pc-reward-summary__label {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.pc-reward-summary strong {
+  color: #0f7a49;
+  font-size: 1.12rem;
+}
+
+.pc-info-icon {
+  width: 28px;
+  height: 28px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  border: none;
+  border-radius: 50%;
+  background: rgba(22, 82, 197, 0.1);
+  color: #1652c5;
+}
+
+.pc-modal-card--reward-info {
+  max-width: 420px;
+}
+
+.pc-reward-modal {
+  display: flex;
+  align-items: flex-start;
+  gap: 16px;
+  padding: 4px 8px 0 0;
+}
+
+.pc-reward-modal__icon {
+  width: 48px;
+  height: 48px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  border-radius: 50%;
+  background: rgba(22, 82, 197, 0.1);
+  color: #1652c5;
+  font-size: 1.35rem;
+}
+
+.pc-reward-modal h2 {
+  margin: 0 0 8px;
+  color: #122b52;
+  font-size: 1.3rem;
+  font-weight: 800;
+}
+
+.pc-reward-modal p {
+  margin: 0;
+  color: #314a73;
+  font-size: 1rem;
+  font-weight: 700;
 }
 
 .pc-account-form__avatar-wrap {
@@ -819,7 +1558,58 @@ export default {
 .pc-address-card__actions {
   display: flex;
   align-items: center;
+  flex-wrap: wrap;
   gap: 12px;
+  flex-shrink: 0;
+}
+
+.pc-account-panel .pc-address-list {
+  min-width: 0;
+  overflow: hidden;
+}
+
+.pc-account-panel .pc-address-card {
+  width: 100%;
+  max-width: 100%;
+  min-width: 0;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  overflow: hidden;
+}
+
+.pc-address-card__content {
+  flex: 1;
+  min-width: 0;
+  max-width: 100%;
+  overflow: hidden;
+}
+
+.pc-address-card__content h3,
+.pc-address-card__content p {
+  display: block;
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.pc-address-card__tag {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 32px;
+  padding: 6px 12px;
+  border-radius: 999px;
+  background: #eef4ff;
+  color: #1652c5;
+  font-size: 0.85rem;
+  font-weight: 800;
+}
+
+.pc-address-card__tag--default {
+  background: #e6f8f5;
+  color: #047c6c;
 }
 
 .pc-discount-list {
@@ -901,6 +1691,44 @@ export default {
   margin-top: 0;
 }
 
+.pc-password-form {
+  margin-top: 14px;
+  padding: 18px;
+  border: 1px solid rgba(22, 82, 197, 0.12);
+  border-radius: 20px;
+  background: #f8fbff;
+}
+
+.pc-password-form__grid {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 14px;
+}
+
+.pc-password-form__actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 12px;
+  margin-top: 14px;
+}
+
+.pc-input-locked:disabled {
+  cursor: not-allowed;
+  background: #f1f5f9;
+  color: #64748b;
+  -webkit-text-fill-color: #64748b;
+}
+
+.pc-field-error {
+  margin-top: 6px;
+  color: #dc3545;
+  font-size: 0.9rem;
+}
+
+.pc-form-field input.is-invalid {
+  border-color: #dc3545;
+}
+
 @media (max-width: 767.98px) {
   .pc-account-profile {
     align-items: flex-start;
@@ -919,6 +1747,15 @@ export default {
   .pc-address-card__actions {
     align-items: flex-start;
     flex-direction: column;
+  }
+
+  .pc-password-form__grid {
+    grid-template-columns: 1fr;
+  }
+
+  .pc-password-form__actions {
+    flex-direction: column-reverse;
+    align-items: stretch;
   }
 }
 .pc-history-card {
@@ -956,12 +1793,69 @@ export default {
   margin: 0;
 }
 
+.pc-history-card__meta small {
+  display: block;
+  margin-top: 4px;
+  color: #6a7894;
+  font-size: 0.84rem;
+  font-weight: 700;
+}
+
 .pc-history-card__summary {
   display: flex;
   align-items: center;
   justify-content: flex-end;
   gap: 14px;
   flex-wrap: wrap;
+}
+
+.pc-history-card__total {
+  display: grid;
+  gap: 2px;
+  text-align: right;
+}
+
+.pc-history-card__total span {
+  color: #6a7894;
+  font-size: 0.82rem;
+  font-weight: 700;
+}
+
+.pc-history-card__total strong {
+  color: #122b52;
+  font-size: 1.02rem;
+}
+
+.pc-history-card__reorder {
+  min-height: 36px;
+  padding: 0 16px;
+  border: 1px solid rgba(22, 82, 197, 0.18);
+  border-radius: 999px;
+  background: #eef5ff;
+  color: #1652c5;
+  font-size: 0.88rem;
+  font-weight: 800;
+  cursor: pointer;
+}
+
+.pc-history-card__reorder:hover {
+  background: #dfeaff;
+}
+
+.pc-history-card__payos {
+  min-height: 36px;
+  padding: 0 16px;
+  border: 1px solid rgba(20, 184, 166, 0.24);
+  border-radius: 999px;
+  background: #e8fffb;
+  color: #04766b;
+  font-size: 0.88rem;
+  font-weight: 800;
+  cursor: pointer;
+}
+
+.pc-history-card__payos:hover {
+  background: #d1fbf3;
 }
 
 .pc-history-card__toggle {
@@ -979,22 +1873,6 @@ export default {
   text-decoration: underline;
 }
 
-.pc-history-card__delete {
-  min-height: 34px;
-  padding: 0 14px;
-  border: 1px solid rgba(220, 53, 69, 0.18);
-  border-radius: 999px;
-  background: #fff5f6;
-  color: #dc3545;
-  font-size: 0.86rem;
-  font-weight: 700;
-  cursor: pointer;
-}
-
-.pc-history-card__delete:hover {
-  background: #ffe9ec;
-}
-
 .pc-history-card__details {
     width: 100%;
     display: grid;
@@ -1003,6 +1881,123 @@ export default {
     padding-top: 16px;
     border-top: 1px solid rgba(22, 82, 197, 0.08);
   }
+
+.pc-history-card__overview {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 14px;
+}
+
+.pc-history-info,
+.pc-history-note {
+  padding: 16px 18px;
+  border: 1px solid rgba(22, 82, 197, 0.08);
+  border-radius: 18px;
+  background: #f8fbff;
+}
+
+.pc-history-info__label {
+  display: block;
+  margin-bottom: 8px;
+  color: #6a7894;
+  font-size: 0.8rem;
+  font-weight: 800;
+  letter-spacing: 0.03em;
+  text-transform: uppercase;
+}
+
+.pc-history-info strong,
+.pc-history-timeline__content strong {
+  color: #122b52;
+}
+
+.pc-history-info p,
+.pc-history-note p {
+  margin: 6px 0 0;
+  color: #6a7894;
+  line-height: 1.55;
+}
+
+.pc-history-info__payos {
+  min-height: 34px;
+  margin-top: 12px;
+  padding: 0 14px;
+  border: 1px solid rgba(20, 184, 166, 0.24);
+  border-radius: 999px;
+  background: #e8fffb;
+  color: #04766b;
+  font-size: 0.86rem;
+  font-weight: 800;
+  cursor: pointer;
+}
+
+.pc-history-info__payos:hover {
+  background: #d1fbf3;
+}
+
+.pc-history-info--totals {
+  display: grid;
+  gap: 8px;
+}
+
+.pc-history-info__row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  color: #6a7894;
+  font-size: 0.93rem;
+}
+
+.pc-history-info__row strong {
+  font-size: 0.95rem;
+}
+
+.pc-history-info__row--points {
+  font-size: 0.9rem;
+}
+
+.pc-history-info__row--total {
+  padding-top: 8px;
+  margin-top: 4px;
+  border-top: 1px dashed rgba(22, 82, 197, 0.16);
+  color: #122b52;
+  font-weight: 800;
+}
+
+.pc-history-card__notes {
+  display: grid;
+  gap: 12px;
+}
+
+.pc-history-timeline {
+  display: grid;
+  gap: 10px;
+}
+
+.pc-history-timeline__item {
+  display: grid;
+  grid-template-columns: 18px minmax(0, 1fr);
+  gap: 12px;
+  align-items: start;
+}
+
+.pc-history-timeline__dot {
+  width: 10px;
+  height: 10px;
+  margin-top: 7px;
+  border-radius: 50%;
+  background: #1652c5;
+  box-shadow: 0 0 0 4px rgba(22, 82, 197, 0.12);
+}
+
+.pc-history-timeline__content p,
+.pc-history-timeline__content small {
+  display: block;
+  margin: 4px 0 0;
+  color: #6a7894;
+  line-height: 1.45;
+}
   
   .pc-history-product {
     width: 100%;
@@ -1020,6 +2015,7 @@ export default {
   border-radius: 18px;
   border: 1px solid rgba(22, 82, 197, 0.1);
   background: linear-gradient(145deg, #ffeaf3, #f3e8ff);
+  overflow: hidden;
 }
 
 .pc-history-product__thumb.tone-blue {
@@ -1047,6 +2043,9 @@ export default {
   color: #6a7894;
   font-size: 0.93rem;
   line-height: 1.55;
+  white-space: pre-line;
+  overflow-wrap: anywhere;
+  word-break: break-word;
 }
 
   .pc-history-product__meta {
@@ -1059,6 +2058,12 @@ export default {
 
 .pc-history-product__meta span {
   color: #6a7894;
+  font-weight: 700;
+}
+
+.pc-history-product__meta small {
+  color: #8a96ad;
+  font-size: 0.8rem;
   font-weight: 700;
 }
 
@@ -1088,6 +2093,10 @@ export default {
   .pc-history-card__head {
     grid-template-columns: 1fr;
     align-items: flex-start;
+  }
+
+  .pc-history-card__overview {
+    grid-template-columns: 1fr;
   }
   
     .pc-history-product {

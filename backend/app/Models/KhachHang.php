@@ -3,6 +3,7 @@
 namespace App\Models;
 
 use Illuminate\Database\Eloquent\Factories\HasFactory;
+use Illuminate\Database\Eloquent\Relations\HasOne;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Foundation\Auth\User as Authenticatable;
 use Illuminate\Support\Facades\Storage;
@@ -42,7 +43,8 @@ class KhachHang extends Authenticatable
         return [
             'email_verified_at' => 'datetime',
             'email_verified' => 'boolean',
-            'ngay_sinh' => 'date',
+            'ngay_sinh' => 'date:Y-m-d',
+            'diem_tich_luy' => 'integer',
             'mat_khau' => 'hashed',
         ];
     }
@@ -50,6 +52,26 @@ class KhachHang extends Authenticatable
     public function hoaDons(): HasMany
     {
         return $this->hasMany(HoaDon::class, 'id_khach_hang', 'id_khach_hang');
+    }
+
+    public function hoTroHoiThoai(): HasOne
+    {
+        return $this->hasOne(HoTroHoiThoai::class, 'id_khach_hang', 'id_khach_hang');
+    }
+
+    public function hoTroTinNhans(): HasMany
+    {
+        return $this->hasMany(HoTroTinNhan::class, 'id_khach_hang', 'id_khach_hang');
+    }
+
+    public function diaChiNhanHangs(): HasMany
+    {
+        return $this->hasMany(DiaChiKhachHang::class, 'id_khach_hang', 'id_khach_hang');
+    }
+
+    public function maGiamGias(): HasMany
+    {
+        return $this->hasMany(MaGiamGia::class, 'id_khach_hang', 'id_khach_hang');
     }
 
     public function getAvatarUrlAttribute(): ?string

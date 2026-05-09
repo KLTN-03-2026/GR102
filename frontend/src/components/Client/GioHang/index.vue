@@ -39,7 +39,14 @@
                     <i class="bi" :class="item.selected ? 'bi-check-square-fill' : 'bi-square'"></i>
                   </button>
 
-                  <div class="pc-cart-item__thumb" :class="item.imageTone || 'pink'"></div>
+                  <div class="pc-cart-item__thumb" :class="item.imageTone || 'pink'">
+                    <img
+                      v-if="item.hinhAnhUrl"
+                      :src="item.hinhAnhUrl"
+                      :alt="item.ten"
+                      style="width: 100%; height: 100%; object-fit: cover; display: block; border-radius: inherit"
+                    />
+                  </div>
 
                   <div class="pc-cart-item__content">
                     <h3>{{ item.ten }}</h3>
@@ -103,6 +110,10 @@
                 <span>Giảm giá mã</span>
                 <strong class="text-success">-{{ formatCurrency(orderPromotionDiscount) }}</strong>
               </div>
+              <div class="pc-summary-card__line">
+                <span>VAT (10%)</span>
+                <strong>{{ formatCurrency(vatAmount) }}</strong>
+              </div>
               <div class="pc-summary-card__total">
                 <span>Tổng tiền</span>
                 <strong>{{ formatCurrency(orderTotal) }}</strong>
@@ -115,22 +126,6 @@
           </div>
         </div>
 
-        <div v-if="giftItems.length" class="row g-4">
-          <div class="col-xl-8">
-            <section class="pc-order-card pc-order-card--gifts">
-              <div class="pc-order-card__sectiontitle">Quà tặng</div>
-              <article v-for="gift in giftItems" :key="gift.id" class="pc-gift-item">
-                <div class="pc-gift-item__thumb"></div>
-                <div class="pc-gift-item__content">
-                  <h3>{{ gift.ten }}</h3>
-                  <p>Phân loại: {{ gift.loai }}</p>
-                </div>
-                <div class="pc-gift-item__meta">x{{ gift.soLuong }}</div>
-                <div class="pc-gift-item__meta">{{ formatCurrency(gift.gia) }}</div>
-              </article>
-            </section>
-          </div>
-        </div>
       </template>
     </div>
   </div>
@@ -168,14 +163,14 @@ export default {
     orderPromotionDiscount() {
       return this.customerStore.orderPromotionDiscount;
     },
+    vatAmount() {
+      return this.customerStore.vatAmount;
+    },
     orderTotal() {
       return this.customerStore.orderTotal;
     },
     canUsePromotionCode() {
       return this.customerStore.canUsePromotionCode;
-    },
-    giftItems() {
-      return this.customerStore.giftItems;
     },
     allSelected() {
       return this.state.cart.length > 0 && this.state.cart.every((item) => item.selected);

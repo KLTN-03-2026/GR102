@@ -11,13 +11,37 @@ export function searchThuocs(keyword) {
 }
 
 export function getLoThuocs() {
-  return apiClient("/admin/lo-thuocs");
+  return apiClient("/lo-thuocs");
+}
+
+export function getPhieuNhaps() {
+  return apiClient("/phieu-nhaps");
+}
+
+export function createPhieuNhap(payload) {
+  return apiClient("/phieu-nhaps", {
+    method: "POST",
+    body: JSON.stringify(payload),
+  });
+}
+
+export function getNhaSanXuats() {
+  return apiClient("/nha-san-xuats");
+}
+
+export function getInventoryAlerts(options = {}) {
+  const query = new URLSearchParams({
+    days: String(options.days ?? 30),
+    low_stock: String(options.lowStock ?? 20),
+  });
+
+  return apiClient(`/lo-thuocs/alerts?${query.toString()}`);
 }
 
 export function searchLoThuocs(keyword) {
   const query = new URLSearchParams({ q: keyword });
 
-  return apiClient(`/admin/lo-thuocs/search?${query.toString()}`);
+  return apiClient(`/lo-thuocs/search?${query.toString()}`);
 }
 
 export function createLoThuoc(payload) {

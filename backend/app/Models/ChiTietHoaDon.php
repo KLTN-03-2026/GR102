@@ -19,6 +19,8 @@ class ChiTietHoaDon extends Model
     protected $fillable = [
         'id_hoa_don',
         'id_lo',
+        'don_vi_ban',
+        'he_so_quy_doi_ban',
         'so_luong',
         'gia_ban',
         'thanh_tien',
@@ -27,6 +29,7 @@ class ChiTietHoaDon extends Model
     protected function casts(): array
     {
         return [
+            'he_so_quy_doi_ban' => 'integer',
             'so_luong' => 'integer',
             'gia_ban' => 'decimal:2',
             'thanh_tien' => 'decimal:2',
