@@ -40,17 +40,6 @@
           </button>
         </div>
       </div>
-
-      <div class="promo-card p-3 mt-4">
-        <div class="soft-badge soft-badge--blue mb-3">
-          <i class="bi bi-layout-text-window-reverse"></i>
-          Khung dùng chung
-        </div>
-        <h6 class="fw-bold mb-2">Menu, header và footer đã tách riêng</h6>
-        <p class="small text-secondary mb-0">
-          Các trang chỉ cần tập trung vào nội dung, khung quản trị sẽ lo phần giao diện dùng chung.
-        </p>
-      </div>
     </div>
   </div>
 </template>
@@ -58,7 +47,7 @@
 <script setup>
 import { computed } from "vue";
 import { useRoute, useRouter } from "vue-router";
-import { isAdminState } from "../../lib/authStorage";
+import { authState, isAdminState } from "../../lib/authStorage";
 
 defineProps({
   mobile: {
@@ -70,76 +59,87 @@ defineProps({
 const route = useRoute();
 const router = useRouter();
 
-const menuSections = computed(() => [
+const counterSection = {
+  label: "Tại quầy",
+  items: [
+    {
+      to: "/ban-tai-quay",
+      label: "Bán hàng",
+      caption: "Khách nhận thuốc tại quầy",
+      icon: "bi bi-shop",
+    },
+  ],
+};
+
+const systemItems = [
   {
-    label: "Điều hành",
-    items: [
-      {
-        to: "/",
-        label: "Trang chủ khách hàng",
-        caption: "Quay lại giao diện bán hàng",
-        icon: "bi bi-house-door",
-      },
-      {
-        to: "/dashboard",
-        label: "Bảng điều khiển",
-        caption: "Tổng quan vận hành",
-        icon: "bi bi-grid-1x2-fill",
-      },
-      {
-        to: "/hoa-dons",
-        label: "Hóa đơn",
-        caption: "Doanh thu và đơn hàng",
-        icon: "bi bi-receipt",
-      },
-      {
-        to: "/ton-kho",
-        label: "Tồn kho",
-        caption: "Thuốc và lô thuốc",
-        icon: "bi bi-box-seam",
-      },
-      {
-        to: "/thuocs",
-        label: "Thuốc",
-        caption: "Danh sách và thêm thuốc",
-        icon: "bi bi-capsule-pill",
-      },
-      {
-        to: "/gia-khuyen-mai",
-        label: "Giá và khuyến mãi",
-        caption: "Giá bán và ưu đãi",
-        icon: "bi bi-tags",
-      },
-      ...(isAdminState.value
-        ? [
-            {
-              to: "/nhan-viens",
-              label: "Nhân viên",
-              caption: "Quản lý dữ liệu nhân sự",
-              icon: "bi bi-people",
-            },
-          ]
-        : []),
-    ],
+    to: "/thong-ke",
+    label: "Thống kê doanh thu",
+    caption: "Doanh thu nhân viên",
+    icon: "bi bi-bar-chart-line",
   },
   {
-    label: "Công cụ",
-    items: [
-      {
-        to: "/sample",
-        label: "Trang mẫu",
-        caption: "Kiểm tra trang kế thừa",
-        icon: "bi bi-window-stack",
-      },
-      {
-        to: "/api-playground",
-        label: "Kết nối API",
-        caption: "Kiểm tra đăng nhập và gọi backend",
-        icon: "bi bi-plug-fill",
-      },
-    ],
+    to: "/hoa-dons",
+    label: "Hóa đơn",
+    caption: "Doanh thu và đơn hàng",
+    icon: "bi bi-receipt",
   },
-]);
+  {
+    to: "/khach-hangs",
+    label: "Khách hàng",
+    caption: "Thông tin và lịch sử mua",
+    icon: "bi bi-person-lines-fill",
+  },
+  {
+    to: "/ho-tro-khach-hang",
+    label: "Hỗ trợ khách hàng",
+    caption: "Chat trực tiếp với khách",
+    icon: "bi bi-chat-dots",
+  },
+  {
+    to: "/ton-kho",
+    label: "Tồn kho",
+    caption: "Thuốc và lô thuốc",
+    icon: "bi bi-box-seam",
+  },
+  {
+    to: "/thuocs",
+    label: "Thuốc",
+    caption: "Danh sách và thêm thuốc",
+    icon: "bi bi-capsule-pill",
+  },
+  {
+    to: "/gia-khuyen-mai",
+    label: "Giá và khuyến mãi",
+    caption: "Giá bán và ưu đãi",
+    icon: "bi bi-tags",
+  },
+];
+
+const menuSections = computed(() => {
+  if (authState.sessionChannel === "tai_quay") {
+    return [counterSection];
+  }
+
+  return [
+    {
+      label: "Điều hành",
+      items: [
+        ...systemItems,
+        ...(isAdminState.value
+          ? [
+              {
+                to: "/nhan-viens",
+                label: "Nhân viên",
+                caption: "Quản lý dữ liệu nhân sự",
+                icon: "bi bi-people",
+              },
+            ]
+          : []),
+      ],
+    },
+  ];
+});
 
 function isActive(path) {
   return route.path === path;

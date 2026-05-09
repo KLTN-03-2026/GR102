@@ -4,6 +4,10 @@ export function getHoaDons() {
   return apiClient("/hoa-dons");
 }
 
+export function getHoaDonChiTiets(id) {
+  return apiClient(`/hoa-dons/${id}/chi-tiets`);
+}
+
 export function searchHoaDons(keyword) {
   const query = new URLSearchParams({ q: keyword });
 
@@ -18,8 +22,16 @@ export function getPendingHoaDonNotifications() {
   return apiClient("/hoa-dons/pending-notifications");
 }
 
-export function confirmHoaDon(id) {
+export function confirmHoaDon(id, payload = {}) {
   return apiClient(`/hoa-dons/${id}/confirm`, {
     method: "POST",
+    body: JSON.stringify(payload),
+  });
+}
+
+export function rejectHoaDon(id, payload = {}) {
+  return apiClient(`/hoa-dons/${id}/reject`, {
+    method: "POST",
+    body: JSON.stringify(payload),
   });
 }

@@ -18,10 +18,27 @@ class LoThuoc extends Model
         'so_lo',
         'ngay_san_xuat',
         'han_su_dung',
+        'don_vi_nhap',
+        'don_vi_co_so',
         'so_luong_nhap',
+        'so_luong_nhap_goc',
         'so_luong_con',
+        'he_so_quy_doi_nhap',
         'gia_nhap',
+        'gia_nhap_quy_doi',
     ];
+
+    protected function casts(): array
+    {
+        return [
+            'so_luong_nhap' => 'integer',
+            'so_luong_nhap_goc' => 'integer',
+            'so_luong_con' => 'integer',
+            'he_so_quy_doi_nhap' => 'integer',
+            'gia_nhap' => 'integer',
+            'gia_nhap_quy_doi' => 'decimal:2',
+        ];
+    }
 
     public function thuoc()
     {

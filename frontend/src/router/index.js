@@ -1,5 +1,10 @@
 import { createRouter, createWebHistory } from "vue-router";
-import { isAdminUser, isAuthenticated, isSystemUser } from "../lib/authStorage";
+import {
+  getSessionChannel,
+  isAdminUser,
+  isAuthenticated,
+  isSystemUser,
+} from "../lib/authStorage";
 
 const routes = [
   {
@@ -8,8 +13,8 @@ const routes = [
     component: () => import("../components/Client/TrangChu/index.vue"),
     meta: {
       layout: "customer",
-      title: "Trang Chu",
-      subtitle: "Khong gian ban thuoc va cham soc suc khoe cho khach hang.",
+      title: "Trang Chủ",
+      subtitle: "Không gian bán thuốc và chăm sóc sức khỏe cho khách hàng.",
     },
   },
   {
@@ -18,8 +23,8 @@ const routes = [
     component: () => import("../components/Client/GioHang/index.vue"),
     meta: {
       layout: "customer",
-      title: "Gio Hang",
-      subtitle: "Quan ly gio hang va khuyen mai truoc khi thanh toan.",
+      title: "Giỏ Hàng",
+      subtitle: "Quản lý giỏ hàng và khuyến mãi trước khi thanh toán.",
     },
   },
   {
@@ -28,8 +33,8 @@ const routes = [
     component: () => import("../components/Client/TimKiem/index.vue"),
     meta: {
       layout: "customer",
-      title: "Tim Kiem Thuoc",
-      subtitle: "Khach hang tim thuoc theo ten, loai va trieu chung.",
+      title: "Tìm Kiếm Thuốc",
+      subtitle: "Khách hàng tìm thuốc theo tên, loại và triệu chứng.",
     },
   },
   {
@@ -48,8 +53,8 @@ const routes = [
     component: () => import("../components/Client/ThanhToan/index.vue"),
     meta: {
       layout: "customer",
-      title: "Thanh Toan",
-      subtitle: "Chon dia chi giao hang va phuong thuc thanh toan.",
+      title: "Thanh Toán",
+      subtitle: "Chọn địa chỉ giao hàng và phương thức thanh toán.",
       requiresAuth: true,
       hideCustomerFooter: true,
     },
@@ -60,8 +65,8 @@ const routes = [
     component: () => import("../components/Client/Profile/index.vue"),
     meta: {
       layout: "customer",
-      title: "Tai Khoan",
-      subtitle: "Quan ly thong tin ca nhan, dia chi, don hang va thong bao.",
+      title: "Tài Khoản",
+      subtitle: "Quản lý thông tin cá nhân, địa chỉ, đơn hàng và thông báo.",
       requiresAuth: true,
     },
   },
@@ -71,8 +76,8 @@ const routes = [
     component: () => import("../components/Client/DangNhap/index.vue"),
     meta: {
       layout: "empty",
-      title: "Dang Nhap",
-      subtitle: "Dang nhap cho khach hang, admin va nhan vien.",
+      title: "Đăng Nhập",
+      subtitle: "Đăng nhập cho khách hàng, admin và nhân viên.",
       guestOnly: true,
     },
   },
@@ -82,45 +87,34 @@ const routes = [
     component: () => import("../components/Client/DangKy/index.vue"),
     meta: {
       layout: "empty",
-      title: "Dang Ky",
-      subtitle: "Dang ky tai khoan khach hang moi.",
+      title: "Đăng Ký",
+      subtitle: "Đăng ký tài khoản khách hàng mới.",
       guestOnly: true,
     },
   },
   {
-    path: "/dashboard",
-    name: "dashboard",
+    path: "/thong-ke",
+    name: "thong-ke",
     component: () => import("../components/Admin/Dashboard/index.vue"),
     meta: {
       layout: "default",
-      title: "Dashboard Dieu Phoi",
-      subtitle: "Theo doi van hanh cac chi nhanh va uu tien xu ly trong ngay.",
+      title: "Thống kê doanh thu",
+      subtitle: "Theo dõi đăng nhập nhân viên, hóa đơn và doanh thu theo ngày, theo tháng.",
       requiresAuth: true,
       requiresSystem: true,
     },
   },
   {
-    path: "/sample",
-    name: "sample",
-    component: () => import("../components/Admin/TrangMau/index.vue"),
+    path: "/ban-tai-quay",
+    name: "ban-tai-quay",
+    component: () => import("../components/Admin/BanTaiQuay/index.vue"),
     meta: {
       layout: "default",
-      title: "Trang Mau Ke Thua",
-      subtitle: "Kiem tra viec cac trang tai su dung master layout Bootstrap.",
+      title: "Bán tại quầy",
+      subtitle: "Lập hóa đơn và thanh toán trực tiếp cho khách nhận thuốc tại quầy.",
       requiresAuth: true,
       requiresSystem: true,
-    },
-  },
-  {
-    path: "/api-playground",
-    name: "api-playground",
-    component: () => import("../components/Admin/KetNoiApi/index.vue"),
-    meta: {
-      layout: "default",
-      title: "Ket Noi API",
-      subtitle: "Dang nhap, luu token va goi API Laravel truc tiep tu frontend.",
-      requiresAuth: true,
-      requiresSystem: true,
+      requiresCounter: true,
     },
   },
   {
@@ -129,8 +123,8 @@ const routes = [
     component: () => import("../components/Admin/NhanVien/index.vue"),
     meta: {
       layout: "default",
-      title: "Quan Ly Nhan Vien",
-      subtitle: "Tao, sua, xoa va doi mat khau nhan vien tu API admin.",
+      title: "Quản Lý Nhân Viên",
+      subtitle: "Tạo, sửa, xóa và đổi mật khẩu nhân viên từ API admin.",
       requiresAuth: true,
       requiresSystem: true,
       requiresAdmin: true,
@@ -142,8 +136,32 @@ const routes = [
     component: () => import("../components/Admin/HoaDon/index.vue"),
     meta: {
       layout: "default",
-      title: "Danh Sach Hoa Don",
-      subtitle: "Xem doanh thu va hoa don dong bo tu backend Laravel.",
+      title: "Danh Sách Hóa Đơn",
+      subtitle: "Xem doanh thu và hóa đơn đồng bộ từ backend Laravel.",
+      requiresAuth: true,
+      requiresSystem: true,
+    },
+  },
+  {
+    path: "/khach-hangs",
+    name: "khach-hangs",
+    component: () => import("../components/Admin/KhachHang/index.vue"),
+    meta: {
+      layout: "default",
+      title: "Quản Lý Khách Hàng",
+      subtitle: "Xem thông tin khách hàng và lịch sử đơn hàng đã mua.",
+      requiresAuth: true,
+      requiresSystem: true,
+    },
+  },
+  {
+    path: "/ho-tro-khach-hang",
+    name: "ho-tro-khach-hang",
+    component: () => import("../components/Admin/HoTroKhachHang/index.vue"),
+    meta: {
+      layout: "default",
+      title: "Hỗ Trợ Khách Hàng",
+      subtitle: "Nhân viên và admin trả lời chat hỗ trợ trực tiếp từ khách hàng.",
       requiresAuth: true,
       requiresSystem: true,
     },
@@ -154,8 +172,8 @@ const routes = [
     component: () => import("../components/Admin/TonKho/index.vue"),
     meta: {
       layout: "default",
-      title: "Ton Kho Va Lo Thuoc",
-      subtitle: "Nhan vien xem ton kho, lo thuoc va han su dung tu database hien tai.",
+      title: "Tồn Kho Và Lô Thuốc",
+      subtitle: "Nhân viên xem tồn kho, lô thuốc và hạn sử dụng từ database hiện tại.",
       requiresAuth: true,
       requiresSystem: true,
     },
@@ -166,8 +184,8 @@ const routes = [
     component: () => import("../components/Admin/Thuoc/index.vue"),
     meta: {
       layout: "default",
-      title: "Quan Ly Thuoc",
-      subtitle: "Xem danh sach, tim kiem va them thuoc moi theo database hien tai.",
+      title: "Quản Lý Thuốc",
+      subtitle: "Xem danh sách, tìm kiếm và thêm thuốc mới theo database hiện tại.",
       requiresAuth: true,
       requiresSystem: true,
     },
@@ -178,8 +196,8 @@ const routes = [
     component: () => import("../components/Admin/GiaKhuyenMai/index.vue"),
     meta: {
       layout: "default",
-      title: "Gia Va Khuyen Mai",
-      subtitle: "Nhan vien va admin cap nhat gia ban va chuong trinh uu dai cho thuoc.",
+      title: "Giá Và Khuyến Mãi",
+      subtitle: "Nhân viên và admin cập nhật giá bán và chương trình ưu đãi cho thuốc.",
       requiresAuth: true,
       requiresSystem: true,
     },
@@ -199,18 +217,33 @@ router.beforeEach((to) => {
   const loggedIn = isAuthenticated();
 
   if (to.meta.requiresAuth && !loggedIn) {
-    return { path: "/login" };
+    return {
+      path: "/login",
+      query: { redirect: to.fullPath },
+    };
   }
 
   if (to.meta.requiresSystem && !isSystemUser()) {
     return { path: "/" };
   }
 
+  if (to.meta.requiresCounter && getSessionChannel() !== "tai_quay") {
+    return { path: "/thong-ke" };
+  }
+
+  if (to.meta.requiresSystem && !to.meta.requiresCounter && getSessionChannel() === "tai_quay") {
+    return { path: "/ban-tai-quay" };
+  }
+
   if (to.meta.requiresAdmin && !isAdminUser()) {
-    return { path: "/dashboard" };
+    return { path: "/thong-ke" };
   }
 
   if (to.meta.guestOnly && loggedIn) {
+    if (isSystemUser()) {
+      return { path: getSessionChannel() === "tai_quay" ? "/ban-tai-quay" : "/thong-ke" };
+    }
+
     return { path: "/" };
   }
 });

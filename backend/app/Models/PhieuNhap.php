@@ -18,8 +18,13 @@ class PhieuNhap extends Model
     public const UPDATED_AT = 'ngay_cap_nhat';
 
     protected $fillable = [
+        'ma_phieu_nhap',
         'id_nha_san_xuat',
         'id_nhan_vien',
+        'so_hoa_don_giay',
+        'ngay_hoa_don',
+        'chung_tu_url',
+        'ghi_chu',
         'tong_tien',
         'ngay_nhap',
     ];
@@ -28,6 +33,7 @@ class PhieuNhap extends Model
     {
         return [
             'tong_tien' => 'decimal:2',
+            'ngay_hoa_don' => 'date',
             'ngay_nhap' => 'datetime',
             'ngay_tao' => 'datetime',
             'ngay_cap_nhat' => 'datetime',

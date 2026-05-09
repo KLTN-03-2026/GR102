@@ -75,8 +75,14 @@ class ChiTietPhieuNhapController extends Controller
             $detail = ChiTietPhieuNhap::create([
                 'id_phieu_nhap' => $idPhieuNhap,
                 'id_lo' => $validated['id_lo'],
+                'don_vi_nhap' => $loThuoc->don_vi_nhap,
+                'don_vi_co_so' => $loThuoc->don_vi_co_so,
+                'so_luong_nhap_goc' => $validated['so_luong'],
+                'he_so_quy_doi_nhap' => 1,
                 'so_luong' => $validated['so_luong'],
                 'gia_nhap' => $validated['gia_nhap'],
+                'gia_nhap_quy_doi' => $validated['gia_nhap'],
+                'thanh_tien' => $validated['so_luong'] * $validated['gia_nhap'],
             ]);
 
             $loThuoc->so_luong_nhap += $validated['so_luong'];
@@ -146,10 +152,18 @@ class ChiTietPhieuNhapController extends Controller
                 $newLo->save();
             }
 
+            $currentLo = $newLoId === $oldLoId ? $oldLo : $newLo;
+
             $detail->update([
                 'id_lo' => $newLoId,
+                'don_vi_nhap' => $currentLo->don_vi_nhap,
+                'don_vi_co_so' => $currentLo->don_vi_co_so,
+                'so_luong_nhap_goc' => $newSoLuong,
+                'he_so_quy_doi_nhap' => 1,
                 'so_luong' => $newSoLuong,
                 'gia_nhap' => $newGiaNhap,
+                'gia_nhap_quy_doi' => $newGiaNhap,
+                'thanh_tien' => $newSoLuong * $newGiaNhap,
             ]);
 
             $this->recalculatePhieuNhap($detail->id_phieu_nhap);
@@ -196,7 +210,7 @@ class ChiTietPhieuNhapController extends Controller
     {
         $tongTien = ChiTietPhieuNhap::query()
             ->where('id_phieu_nhap', $idPhieuNhap)
-            ->selectRaw('coalesce(sum(so_luong * gia_nhap), 0) as tong_tien')
+            ->selectRaw('coalesce(sum(coalesce(thanh_tien, so_luong * gia_nhap)), 0) as tong_tien')
             ->value('tong_tien');
 
         PhieuNhap::query()
@@ -209,7 +223,7 @@ class ChiTietPhieuNhapController extends Controller
         return ChiTietPhieuNhap::query()
             ->with([
                 'phieuNhap:id_phieu_nhap,id_nha_san_xuat,id_nhan_vien,tong_tien,ngay_nhap',
-                'loThuoc:id_lo,so_lo,id_thuoc,so_luong_nhap,so_luong_con,gia_nhap',
+                'loThuoc:id_lo,so_lo,id_thuoc,so_luong_nhap,so_luong_con,gia_nhap,don_vi_nhap,don_vi_co_so,so_luong_nhap_goc,he_so_quy_doi_nhap,gia_nhap_quy_doi',
                 'loThuoc.thuoc:ma_thuoc,ten_thuoc',
             ])
             ->orderByDesc('id');

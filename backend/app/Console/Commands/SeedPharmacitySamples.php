@@ -125,6 +125,8 @@ class SeedPharmacitySamples extends Command
             $giaBan = (float) ($loThuoc->thuoc?->gia_ban ?? 100000);
             $tongTien = $soLuong * $giaBan;
             $giamGia = $i % 2 === 0 ? 0 : min(50000, $tongTien * 0.1);
+            $tienSauGiam = max($tongTien - $giamGia, 0);
+            $thueVat = round($tienSauGiam * 0.1, 2);
 
             $hoaDon = HoaDon::create([
                 'ma_hoa_don' => 'HDAUTO' . now()->format('His') . str_pad((string) $i, 2, '0', STR_PAD_LEFT),
@@ -132,7 +134,8 @@ class SeedPharmacitySamples extends Command
                 'id_nhan_vien' => $nhanViens[$i]->id_nhan_vien,
                 'tong_tien' => $tongTien,
                 'giam_gia' => $giamGia,
-                'tien_thanh_toan' => $tongTien - $giamGia,
+                'thue_vat' => $thueVat,
+                'tien_thanh_toan' => $tienSauGiam + $thueVat,
                 'ngay_ban' => now()->subDays($i),
             ]);
 
@@ -159,10 +162,10 @@ class SeedPharmacitySamples extends Command
         foreach ($hoaDons as $index => $hoaDon) {
             ThanhToan::create([
                 'id_hoa_don' => $hoaDon->id_hoa_don,
-                'phuong_thuc' => ['tien_mat', 'chuyen_khoan', 'the'][$index % 3],
+                'phuong_thuc' => ['tien_mat', 'payos'][$index % 2],
                 'so_tien' => $hoaDon->tien_thanh_toan,
                 'thoi_gian' => now()->subMinutes($index * 10),
-                'ma_giao_dich' => $index % 3 === 0 ? null : 'GD' . strtoupper(Str::random(8)),
+                'ma_giao_dich' => $index % 2 === 0 ? null : 'GD' . strtoupper(Str::random(8)),
             ]);
         }
     }
